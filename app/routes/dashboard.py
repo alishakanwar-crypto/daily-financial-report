@@ -5,10 +5,11 @@ from __future__ import annotations
 import logging
 import os
 
-from fastapi import APIRouter, Request, Form, HTTPException
+from fastapi import APIRouter, Depends, Query, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 
+from app.config import settings
 from app.database import (
     get_active_recipients,
     add_recipient,
@@ -24,8 +25,15 @@ templates = Jinja2Templates(
 )
 
 
+def _verify_token(token: str = Query(None, alias="token")):
+    """Require ?token=<APP_SECRET> on protected dashboard routes."""
+    if settings.app_secret and settings.app_secret != "change-me-in-production":
+        if token != settings.app_secret:
+            raise HTTPException(403, "Invalid or missing access token. Append ?token=<APP_SECRET> to the URL.")
+
+
 @router.get("/", response_class=HTMLResponse)
-async def dashboard_home(request: Request):
+async def dashboard_home(request: Request, _: None = Depends(_verify_token)):
     """Render the mailing-list management dashboard."""
     from app.database import get_db
 
@@ -54,7 +62,7 @@ async def dashboard_home(request: Request):
 
 
 @router.post("/add-recipient")
-async def handle_add_recipient(email: str = Form(...), name: str = Form("")):
+async def handle_add_recipient(email: str = Form(...), name: str = Form(""), _: None = Depends(_verify_token)):
     """Add a new email to the mailing list."""
     email = email.strip().lower()
     if not email or "@" not in email:
@@ -64,14 +72,14 @@ async def handle_add_recipient(email: str = Form(...), name: str = Form("")):
 
 
 @router.post("/remove-recipient")
-async def handle_remove_recipient(email: str = Form(...)):
+async def handle_remove_recipient(email: str = Form(...), _: None = Depends(_verify_token)):
     """Remove an email from the mailing list."""
     await remove_recipient(email.strip().lower())
     return RedirectResponse("/", status_code=303)
 
 
 @router.post("/toggle-recipient")
-async def handle_toggle_recipient(email: str = Form(...), active: str = Form("1")):
+async def handle_toggle_recipient(email: str = Form(...), active: str = Form("1"), _: None = Depends(_verify_token)):
     """Toggle active/inactive status."""
     await toggle_recipient(email.strip().lower(), active == "1")
     return RedirectResponse("/", status_code=303)
@@ -93,7 +101,7 @@ async def handle_unsubscribe(email: str = Form(...)):
 
 
 @router.post("/trigger-report")
-async def trigger_report_now():
+async def trigger_report_now(_: None = Depends(_verify_token)):
     """Manually trigger report generation & sending."""
     from app.report.generator import generate_pdf
     from app.report.email_sender import send_report
@@ -115,7 +123,7 @@ async def trigger_report_now():
 
 
 @router.get("/download-latest")
-async def download_latest():
+async def download_latest(_: None = Depends(_verify_token)):
     """Download the most recent generated PDF."""
     report_dir = "data/reports"
     if not os.path.isdir(report_dir):

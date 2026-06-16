@@ -73,16 +73,15 @@ async def filter_and_rank(
             "outlook": str,
         }
     """
-    if not settings.openai_api_key:
-        # Fallback: return top N by recency (no AI)
-        log.warning("No OpenAI key – falling back to recency-based selection")
-        return _fallback_select(articles, pick + extra, segment)
-
-    # Filter out previously sent articles
+    # Filter out previously sent articles (runs for both AI and fallback paths)
     fresh: list[dict] = []
     for a in articles:
         if not await is_article_sent(a["url"]):
             fresh.append(a)
+
+    if not settings.openai_api_key:
+        log.warning("No OpenAI key – falling back to recency-based selection")
+        return _fallback_select(fresh, pick + extra, segment)
 
     if len(fresh) < pick + extra:
         log.warning(f"Only {len(fresh)} fresh articles for {segment}")

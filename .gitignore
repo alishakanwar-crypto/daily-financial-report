@@ -1,7 +1,7 @@
 __pycache__/
 *.pyc
 .env
-data/
+/data/
 *.pdf
 .venv/
 venv/

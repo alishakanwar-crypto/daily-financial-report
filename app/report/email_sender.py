@@ -89,25 +89,26 @@ async def send_report(pdf_path: str, report_data: dict | None = None) -> dict:
         pdf_data = f.read()
     pdf_filename = os.path.basename(pdf_path)
 
-    body_html = EMAIL_HTML_TEMPLATE.format(
-        date=today,
-        indian_stocks=report_data.get("indian_count", 15) if report_data else 15,
-        us_stocks=report_data.get("us_count", 15) if report_data else 15,
-        deep_indian=report_data.get("deep_indian", "Top Indian Co") if report_data else "Top Indian Co",
-        deep_us=report_data.get("deep_us", "Top US Co") if report_data else "Top US Co",
-        unsubscribe_url=f"{settings.base_url}/unsubscribe",
-    )
-
     sent = 0
     failed = 0
     errors: list[str] = []
 
     for recip in recipients:
         try:
+            recip_email = recip["email"]
+            body_html = EMAIL_HTML_TEMPLATE.format(
+                date=today,
+                indian_stocks=report_data.get("indian_count", 15) if report_data else 15,
+                us_stocks=report_data.get("us_count", 15) if report_data else 15,
+                deep_indian=report_data.get("deep_indian", "Top Indian Co") if report_data else "Top Indian Co",
+                deep_us=report_data.get("deep_us", "Top US Co") if report_data else "Top US Co",
+                unsubscribe_url=f"{settings.base_url}/unsubscribe?email={recip_email}",
+            )
+
             msg = EmailMessage()
             msg["Subject"] = f"📊 Daily Market Pulse – {today}"
             msg["From"] = formataddr((settings.email_from_name, settings.smtp_user))
-            msg["To"] = recip["email"]
+            msg["To"] = recip_email
 
             msg.set_content(f"Your Daily Market Pulse report for {today} is attached.")
             msg.add_alternative(body_html, subtype="html")

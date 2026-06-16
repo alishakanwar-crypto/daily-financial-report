@@ -190,6 +190,6 @@ def _fallback_select(articles: list[dict], n: int, segment: str) -> dict:
     segment_label = segment.replace("_", " ").title()
     return {
         "articles": selected,
-        "summary": f"Today's top {len(selected)} financial articles curated from leading {segment_label} sources including {', '.join(set(a.get('feed_name', 'various') for a in selected[:3]))}.",
+        "summary": f"Today's top {len(selected)} financial articles curated from leading {segment_label} sources." if not selected else f"Today's top {len(selected)} financial articles curated from leading {segment_label} sources including {', '.join(set(a.get('feed_name', 'various') for a in selected[:3]))}.",
         "outlook": "Check back tomorrow for AI-powered market analysis and outlook.",
     }

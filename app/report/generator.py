@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from datetime import datetime, timedelta
@@ -30,17 +31,17 @@ async def collect_all_data() -> dict:
     weekend = _is_weekend()
 
     log.info("Fetching Indian stocks...")
-    indian_stocks = fetch_stock_data(settings.indian_stocks, currency="INR")
+    indian_stocks = await asyncio.to_thread(fetch_stock_data, settings.indian_stocks, "INR")
 
     log.info("Fetching US stocks...")
-    us_stocks = fetch_stock_data(settings.us_stocks, currency="USD")
+    us_stocks = await asyncio.to_thread(fetch_stock_data, settings.us_stocks, "USD")
 
     log.info("Fetching commodities & indices...")
-    commodities = fetch_commodities(is_weekend=weekend)
-    indices = fetch_indices(is_weekend=weekend)
+    commodities = await asyncio.to_thread(fetch_commodities, weekend)
+    indices = await asyncio.to_thread(fetch_indices, weekend)
 
     log.info("Fetching deep dive data...")
-    deep_dive = select_deep_dive()
+    deep_dive = await asyncio.to_thread(select_deep_dive)
 
     # News
     log.info("Fetching & filtering Indian news...")

@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime, timedelta
 from typing import Optional
 
 import yfinance as yf
+import pandas as pd
 
 log = logging.getLogger(__name__)
 
@@ -85,24 +87,64 @@ def _format_market_cap_inr(val: Optional[float]) -> str:
     return f"₹{val:,.0f}"
 
 
+def _batch_download(tickers: list[str], period: str = "1y") -> pd.DataFrame:
+    """Download price history for multiple tickers in one call with retries."""
+    for attempt in range(3):
+        try:
+            df = yf.download(
+                tickers,
+                period=period,
+                group_by="ticker",
+                threads=False,
+                progress=False,
+            )
+            if df is not None and not df.empty:
+                return df
+        except Exception as e:
+            log.warning(f"Batch download attempt {attempt + 1} failed: {e}")
+        time.sleep(2 * (attempt + 1))
+    return pd.DataFrame()
+
+
 def fetch_stock_data(tickers: list[str], currency: str = "USD") -> list[dict]:
     """Fetch price data, market cap, and DuPont ratios for a list of tickers."""
     results = []
-    today = datetime.utcnow().date()
-    # Get enough history for monthly/yearly comparisons
-    start_date = today - timedelta(days=400)
+
+    # Batch download all price history at once
+    log.info(f"Batch downloading {len(tickers)} tickers...")
+    all_data = _batch_download(tickers, period="1y")
 
     for ticker_symbol in tickers:
         try:
-            tk = yf.Ticker(ticker_symbol)
-            hist = tk.history(start=str(start_date), end=str(today + timedelta(days=1)))
+            # Extract this ticker's data from the batch
+            if all_data.empty:
+                log.warning(f"No batch data available for {ticker_symbol}")
+                results.append(_empty_stock(ticker_symbol, currency))
+                continue
+
+            if len(tickers) == 1:
+                hist = all_data
+            else:
+                try:
+                    hist = all_data[ticker_symbol].dropna(how="all")
+                except KeyError:
+                    log.warning(f"Ticker {ticker_symbol} not in batch data")
+                    results.append(_empty_stock(ticker_symbol, currency))
+                    continue
 
             if hist.empty or len(hist) < 2:
                 log.warning(f"No data for {ticker_symbol}")
                 results.append(_empty_stock(ticker_symbol, currency))
                 continue
 
-            # Yesterday and day before
+            # Use the last fully-complete trading day (skip today's partial data)
+            # Check if the last row has NaN close — if so, use the row before
+            if pd.isna(hist.iloc[-1].get("Close")):
+                hist = hist.iloc[:-1]
+            if hist.empty or len(hist) < 2:
+                results.append(_empty_stock(ticker_symbol, currency))
+                continue
+
             yesterday = hist.iloc[-1]
             day_before = hist.iloc[-2] if len(hist) >= 2 else None
 
@@ -115,16 +157,16 @@ def fetch_stock_data(tickers: list[str], currency: str = "USD") -> list[dict]:
             close_price = _safe_float(yesterday.get("Close"))
             day_before_close = _safe_float(day_before.get("Close")) if day_before is not None else None
 
-            info = tk.info or {}
-            market_cap = _safe_float(info.get("marketCap"))
+            # Market cap from info (with retry)
+            market_cap = _get_market_cap(ticker_symbol)
             fmt_cap = _format_market_cap_inr(market_cap) if currency == "INR" else _format_market_cap(market_cap)
 
-            # DuPont ratios
-            dupont = _compute_dupont(tk)
+            # DuPont ratios (with retry/backoff)
+            dupont = _compute_dupont_safe(ticker_symbol)
 
             row = {
                 "ticker": ticker_symbol,
-                "name": TICKER_NAMES.get(ticker_symbol, info.get("shortName", ticker_symbol)),
+                "name": TICKER_NAMES.get(ticker_symbol, ticker_symbol),
                 "currency": currency,
                 "market_cap": market_cap,
                 "market_cap_fmt": fmt_cap,
@@ -141,10 +183,48 @@ def fetch_stock_data(tickers: list[str], currency: str = "USD") -> list[dict]:
             }
             results.append(row)
         except Exception as e:
-            log.error(f"Error fetching {ticker_symbol}: {e}")
+            log.error(f"Error processing {ticker_symbol}: {e}")
             results.append(_empty_stock(ticker_symbol, currency))
 
     return results
+
+
+def _get_market_cap(ticker_symbol: str) -> Optional[float]:
+    """Fetch market cap with retry logic."""
+    for attempt in range(2):
+        try:
+            tk = yf.Ticker(ticker_symbol)
+            info = tk.info or {}
+            cap = _safe_float(info.get("marketCap"))
+            if cap:
+                return cap
+        except Exception as e:
+            log.debug(f"Market cap fetch attempt {attempt + 1} for {ticker_symbol}: {e}")
+        time.sleep(1)
+    return None
+
+
+def _compute_dupont_safe(ticker_symbol: str) -> dict:
+    """Compute DuPont ratios with retry logic."""
+    blank = {
+        "roe": None,
+        "net_profit_margin": None,
+        "asset_turnover": None,
+        "equity_multiplier": None,
+        "tax_burden": None,
+        "interest_burden": None,
+        "operating_margin": None,
+    }
+    for attempt in range(2):
+        try:
+            tk = yf.Ticker(ticker_symbol)
+            result = _compute_dupont(tk)
+            if any(v is not None for v in result.values()):
+                return result
+        except Exception as e:
+            log.debug(f"DuPont attempt {attempt + 1} for {ticker_symbol}: {e}")
+        time.sleep(1)
+    return blank
 
 
 def _compute_dupont(tk: yf.Ticker) -> dict:
@@ -171,16 +251,20 @@ def _compute_dupont(tk: yf.Ticker) -> dict:
         pretax = _safe_float(inc.loc["Pretax Income"].iloc[0]) if "Pretax Income" in inc.index else None
 
         total_assets = _safe_float(bs.loc["Total Assets"].iloc[0]) if "Total Assets" in bs.index else None
-        equity_key = "Stockholders Equity"
-        if equity_key not in bs.index:
-            equity_key = "Total Stockholder Equity"
-        if equity_key not in bs.index:
-            # Try common variants
+
+        # Try common equity key variants
+        total_equity = None
+        for eq_key in ["Stockholders Equity", "Total Stockholder Equity",
+                       "Stockholders' Equity", "Total Equity Gross Minority Interest"]:
+            if eq_key in bs.index:
+                total_equity = _safe_float(bs.loc[eq_key].iloc[0])
+                if total_equity:
+                    break
+        if total_equity is None:
             for k in bs.index:
                 if "stockholder" in k.lower() and "equity" in k.lower():
-                    equity_key = k
+                    total_equity = _safe_float(bs.loc[k].iloc[0])
                     break
-        total_equity = _safe_float(bs.loc[equity_key].iloc[0]) if equity_key in bs.index else None
 
         # 3-part DuPont
         npm = (net_income / revenue * 100) if net_income and revenue else None

@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime, timedelta
 from typing import Optional
 
 import yfinance as yf
+import pandas as pd
 
 log = logging.getLogger(__name__)
 
@@ -50,18 +52,50 @@ def _pct_change(current: Optional[float], previous: Optional[float]) -> Optional
     return round(((current - previous) / previous) * 100, 2)
 
 
-def _fetch_one(symbol: str, days_back: int = 400) -> dict:
-    """Generic fetch for a single symbol returning price + changes."""
-    today = datetime.utcnow().date()
-    start = today - timedelta(days=days_back)
+def _batch_download(symbols: list[str], period: str = "1y") -> pd.DataFrame:
+    """Download history for multiple symbols in one call with retries."""
+    for attempt in range(3):
+        try:
+            df = yf.download(
+                symbols,
+                period=period,
+                group_by="ticker",
+                threads=False,
+                progress=False,
+            )
+            if df is not None and not df.empty:
+                return df
+        except Exception as e:
+            log.warning(f"Batch download attempt {attempt + 1} failed: {e}")
+        time.sleep(2 * (attempt + 1))
+    return pd.DataFrame()
 
+
+def _extract_metrics(df: pd.DataFrame, symbol: str, multi_ticker: bool) -> dict:
+    """Extract price and change metrics for a single symbol from batch data."""
+    empty = {"open": None, "close": None, "high": None, "low": None,
+             "prev_close": None, "daily_change_pct": None,
+             "monthly_change_pct": None, "yearly_change_pct": None}
     try:
-        tk = yf.Ticker(symbol)
-        hist = tk.history(start=str(start), end=str(today + timedelta(days=1)))
+        if df.empty:
+            return empty
+
+        if multi_ticker:
+            try:
+                hist = df[symbol].dropna(how="all")
+            except KeyError:
+                return empty
+        else:
+            hist = df
 
         if hist.empty:
-            return {"open": None, "close": None, "daily_change_pct": None,
-                    "monthly_change_pct": None, "yearly_change_pct": None}
+            return empty
+
+        # Skip today's partial data if the latest row has NaN close
+        if pd.isna(hist.iloc[-1].get("Close")):
+            hist = hist.iloc[:-1]
+        if hist.empty:
+            return empty
 
         latest = hist.iloc[-1]
         prev = hist.iloc[-2] if len(hist) >= 2 else None
@@ -80,50 +114,45 @@ def _fetch_one(symbol: str, days_back: int = 400) -> dict:
             "yearly_change_pct": _pct_change(close, _safe_float(yearly.get("Close"))),
         }
     except Exception as e:
-        log.error(f"Error fetching {symbol}: {e}")
-        return {"open": None, "close": None, "daily_change_pct": None,
-                "monthly_change_pct": None, "yearly_change_pct": None}
+        log.error(f"Error extracting metrics for {symbol}: {e}")
+        return empty
 
 
 def fetch_commodities(is_weekend: bool = False) -> list[dict]:
     """Fetch commodity prices. Skip tradeable commodities on weekends."""
-    results = []
-    tickers = {**COMMODITY_TICKERS}
     if is_weekend:
-        # Futures markets are closed on weekends – skip
-        tickers = {}
+        return []
 
+    tickers = {**COMMODITY_TICKERS, **INDIAN_COMMODITY_TICKERS}
+    symbols = [meta["symbol"] for meta in tickers.values()]
+
+    log.info(f"Batch downloading {len(symbols)} commodity tickers...")
+    df = _batch_download(symbols, period="1y")
+    multi = len(symbols) > 1
+
+    results = []
     for key, meta in tickers.items():
-        data = _fetch_one(meta["symbol"])
+        data = _extract_metrics(df, meta["symbol"], multi)
         results.append({
             "key": key,
             "name": meta["name"],
             "unit": meta.get("unit", ""),
             **data,
         })
-
-    # Indian commodity ETFs
-    if not is_weekend:
-        for key, meta in INDIAN_COMMODITY_TICKERS.items():
-            data = _fetch_one(meta["symbol"])
-            results.append({
-                "key": key,
-                "name": meta["name"],
-                "unit": meta.get("unit", "₹"),
-                **data,
-            })
-
     return results
 
 
 def fetch_indices(is_weekend: bool = False) -> list[dict]:
     """Fetch major market indices."""
+    symbols = [meta["symbol"] for meta in INDEX_TICKERS.values()]
+
+    log.info(f"Batch downloading {len(symbols)} index tickers...")
+    df = _batch_download(symbols, period="1y")
+    multi = len(symbols) > 1
+
     results = []
     for key, meta in INDEX_TICKERS.items():
-        if is_weekend:
-            # Still show last known values; yfinance returns last trading day
-            pass
-        data = _fetch_one(meta["symbol"])
+        data = _extract_metrics(df, meta["symbol"], multi)
         results.append({
             "key": key,
             "name": meta["name"],

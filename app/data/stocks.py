@@ -219,7 +219,7 @@ def _compute_dupont_safe(ticker_symbol: str) -> dict:
         try:
             tk = yf.Ticker(ticker_symbol)
             result = _compute_dupont(tk)
-            if result.get("roe") is not None:
+            if any(v is not None for v in result.values()):
                 return result
         except Exception as e:
             log.debug(f"DuPont attempt {attempt + 1} for {ticker_symbol}: {e}")

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import logging
 import os
+from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, Query, Request, Form, HTTPException
+from fastapi import APIRouter, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 
@@ -25,16 +26,36 @@ templates = Jinja2Templates(
 )
 
 
-def _verify_token(token: str = Query(None, alias="token")):
-    """Require ?token=<APP_SECRET> on protected dashboard routes."""
+def _get_token(request: Request, token: str | None = None) -> str | None:
+    """Extract token from query string or form body."""
+    return (
+        request.query_params.get("token")
+        or token
+        or None
+    )
+
+
+def _check_auth(token: str | None):
+    """Verify token matches APP_SECRET (skip if secret is default/unset)."""
     if settings.app_secret and settings.app_secret != "change-me-in-production":
         if token != settings.app_secret:
             raise HTTPException(403, "Invalid or missing access token. Append ?token=<APP_SECRET> to the URL.")
 
 
+def _redirect_with_token(path: str, token: str | None) -> RedirectResponse:
+    """Redirect back to dashboard preserving the auth token."""
+    url = path
+    if token:
+        url = f"{path}?{urlencode({'token': token})}"
+    return RedirectResponse(url, status_code=303)
+
+
 @router.get("/", response_class=HTMLResponse)
-async def dashboard_home(request: Request, _: None = Depends(_verify_token)):
+async def dashboard_home(request: Request):
     """Render the mailing-list management dashboard."""
+    token = _get_token(request)
+    _check_auth(token)
+
     from app.database import get_db
 
     db = await get_db()
@@ -57,32 +78,53 @@ async def dashboard_home(request: Request, _: None = Depends(_verify_token)):
             "request": request,
             "recipients": recipients,
             "recent_reports": recent_reports,
+            "token": token or "",
         },
     )
 
 
 @router.post("/add-recipient")
-async def handle_add_recipient(email: str = Form(...), name: str = Form(""), _: None = Depends(_verify_token)):
+async def handle_add_recipient(
+    request: Request,
+    email: str = Form(...),
+    name: str = Form(""),
+    token: str = Form(None),
+):
     """Add a new email to the mailing list."""
+    tk = _get_token(request, token)
+    _check_auth(tk)
     email = email.strip().lower()
     if not email or "@" not in email:
         raise HTTPException(400, "Invalid email")
     await add_recipient(email, name.strip())
-    return RedirectResponse("/", status_code=303)
+    return _redirect_with_token("/", tk)
 
 
 @router.post("/remove-recipient")
-async def handle_remove_recipient(email: str = Form(...), _: None = Depends(_verify_token)):
+async def handle_remove_recipient(
+    request: Request,
+    email: str = Form(...),
+    token: str = Form(None),
+):
     """Remove an email from the mailing list."""
+    tk = _get_token(request, token)
+    _check_auth(tk)
     await remove_recipient(email.strip().lower())
-    return RedirectResponse("/", status_code=303)
+    return _redirect_with_token("/", tk)
 
 
 @router.post("/toggle-recipient")
-async def handle_toggle_recipient(email: str = Form(...), active: str = Form("1"), _: None = Depends(_verify_token)):
+async def handle_toggle_recipient(
+    request: Request,
+    email: str = Form(...),
+    active: str = Form("1"),
+    token: str = Form(None),
+):
     """Toggle active/inactive status."""
+    tk = _get_token(request, token)
+    _check_auth(tk)
     await toggle_recipient(email.strip().lower(), active == "1")
-    return RedirectResponse("/", status_code=303)
+    return _redirect_with_token("/", tk)
 
 
 @router.get("/unsubscribe", response_class=HTMLResponse)
@@ -101,8 +143,11 @@ async def handle_unsubscribe(email: str = Form(...)):
 
 
 @router.post("/trigger-report")
-async def trigger_report_now(_: None = Depends(_verify_token)):
+async def trigger_report_now(request: Request, token: str = Form(None)):
     """Manually trigger report generation & sending."""
+    tk = _get_token(request, token)
+    _check_auth(tk)
+
     from app.report.generator import generate_pdf
     from app.report.email_sender import send_report
     from app.database import log_report
@@ -115,7 +160,7 @@ async def trigger_report_now(_: None = Depends(_verify_token)):
         pdf_path = await generate_pdf()
         result = await send_report(pdf_path)
         await log_report(date_str, "sent", pdf_path)
-        return {"status": "ok", "pdf": pdf_path, **result}
+        return _redirect_with_token("/", tk)
     except Exception as e:
         await log_report(date_str, "failed", error=str(e))
         log.error(f"Report generation failed: {e}")
@@ -123,8 +168,10 @@ async def trigger_report_now(_: None = Depends(_verify_token)):
 
 
 @router.get("/download-latest")
-async def download_latest(_: None = Depends(_verify_token)):
+async def download_latest(request: Request):
     """Download the most recent generated PDF."""
+    tk = _get_token(request)
+    _check_auth(tk)
     report_dir = "data/reports"
     if not os.path.isdir(report_dir):
         raise HTTPException(404, "No reports generated yet")

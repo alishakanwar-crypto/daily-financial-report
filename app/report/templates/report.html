@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Daily Market Pulse – {{ report_date }}</title>
+<style>
+  /* ── Reset & Base ──────────────────────────────────────────── */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  @page {
+    size: A4;
+    margin: 18mm 15mm 20mm 15mm;
+    @bottom-center {
+      content: "Daily Market Pulse – Page " counter(page) " of " counter(pages);
+      font-size: 8pt;
+      color: #94a3b8;
+      font-family: 'Inter', 'Helvetica Neue', sans-serif;
+    }
+  }
+
+  body {
+    font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif;
+    font-size: 9pt;
+    line-height: 1.45;
+    color: #1e293b;
+    background: #fff;
+  }
+
+  /* ── Cover / Header ────────────────────────────────────────── */
+  .cover {
+    background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0f172a 100%);
+    color: #fff;
+    padding: 40px 35px;
+    margin: -18mm -15mm 25px -15mm;
+    page-break-after: avoid;
+  }
+  .cover h1 {
+    font-size: 28pt;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    margin-bottom: 4px;
+  }
+  .cover .subtitle {
+    font-size: 11pt;
+    color: #94a3b8;
+    font-weight: 400;
+  }
+  .cover .date-line {
+    margin-top: 14px;
+    font-size: 10pt;
+    color: #e2e8f0;
+  }
+  .cover .date-line span { font-weight: 600; }
+  .cover .tagline {
+    margin-top: 8px;
+    font-size: 8.5pt;
+    color: #64748b;
+    font-style: italic;
+  }
+
+  /* ── Weekend Banner ────────────────────────────────────────── */
+  .weekend-banner {
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    border-radius: 6px;
+    padding: 10px 16px;
+    font-size: 8.5pt;
+    color: #92400e;
+    margin-bottom: 20px;
+  }
+
+  /* ── Section Headers ───────────────────────────────────────── */
+  .section {
+    page-break-inside: avoid;
+    margin-bottom: 24px;
+  }
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+    border-bottom: 3px solid;
+    padding-bottom: 8px;
+  }
+  .section-header .flag { font-size: 18pt; }
+  .section-header h2 {
+    font-size: 14pt;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+  }
+  .section-header .desc {
+    font-size: 8pt;
+    color: #64748b;
+    margin-left: auto;
+  }
+
+  .india-border  { border-color: #f97316; }
+  .us-border     { border-color: #3b82f6; }
+  .intl-border   { border-color: #10b981; }
+  .deep-border   { border-color: #8b5cf6; }
+
+  /* ── Tables ────────────────────────────────────────────────── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 16px;
+    font-size: 8pt;
+  }
+  thead th {
+    background: #f1f5f9;
+    color: #475569;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 7pt;
+    letter-spacing: 0.5px;
+    padding: 6px 5px;
+    text-align: right;
+    border-bottom: 2px solid #e2e8f0;
+  }
+  thead th:first-child { text-align: left; }
+  tbody td {
+    padding: 5px 5px;
+    border-bottom: 1px solid #f1f5f9;
+    text-align: right;
+    white-space: nowrap;
+  }
+  tbody td:first-child {
+    text-align: left;
+    font-weight: 600;
+    color: #1e293b;
+  }
+  tbody tr:nth-child(even) { background: #fafbfc; }
+  tbody tr:hover { background: #f0f4ff; }
+
+  .positive { color: #16a34a; font-weight: 600; }
+  .negative { color: #dc2626; font-weight: 600; }
+  .neutral  { color: #64748b; }
+
+  .ticker-label {
+    font-size: 6.5pt;
+    color: #94a3b8;
+    display: block;
+  }
+
+  /* ── Sub-tables (DuPont) ───────────────────────────────────── */
+  .sub-section {
+    margin-top: 12px;
+    margin-bottom: 16px;
+  }
+  .sub-section h3 {
+    font-size: 10pt;
+    font-weight: 600;
+    color: #334155;
+    margin-bottom: 8px;
+    border-left: 3px solid #94a3b8;
+    padding-left: 8px;
+  }
+
+  /* ── News Cards ────────────────────────────────────────────── */
+  .news-list {
+    list-style: none;
+    padding: 0;
+  }
+  .news-item {
+    padding: 10px 14px;
+    margin-bottom: 8px;
+    border-radius: 6px;
+    background: #f8fafc;
+    border-left: 3px solid #cbd5e1;
+    page-break-inside: avoid;
+  }
+  .news-item.out-of-box {
+    border-left-color: #8b5cf6;
+    background: #faf5ff;
+  }
+  .news-title {
+    font-weight: 600;
+    font-size: 9pt;
+    color: #1e293b;
+    margin-bottom: 3px;
+  }
+  .news-title a {
+    color: #1e40af;
+    text-decoration: none;
+  }
+  .news-meta {
+    font-size: 7.5pt;
+    color: #64748b;
+  }
+  .news-reason {
+    font-size: 8pt;
+    color: #475569;
+    margin-top: 3px;
+    font-style: italic;
+  }
+  .news-score {
+    display: inline-block;
+    background: #dbeafe;
+    color: #1d4ed8;
+    font-size: 7pt;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+  .news-oob-badge {
+    display: inline-block;
+    background: #ede9fe;
+    color: #7c3aed;
+    font-size: 7pt;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 3px;
+    margin-left: 4px;
+  }
+
+  /* ── Summary Box ───────────────────────────────────────────── */
+  .summary-box {
+    background: linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%);
+    border: 1px solid #bfdbfe;
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin-bottom: 16px;
+    page-break-inside: avoid;
+  }
+  .summary-box h4 {
+    font-size: 9pt;
+    font-weight: 700;
+    color: #1e40af;
+    margin-bottom: 4px;
+  }
+  .summary-box p {
+    font-size: 8.5pt;
+    color: #334155;
+    line-height: 1.5;
+  }
+  .outlook-tag {
+    display: inline-block;
+    margin-top: 6px;
+    font-size: 7.5pt;
+    font-weight: 600;
+    color: #0369a1;
+    background: #e0f2fe;
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+
+  /* ── Deep Dive Cards ───────────────────────────────────────── */
+  .deep-card {
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 16px 18px;
+    margin-bottom: 16px;
+    page-break-inside: avoid;
+  }
+  .deep-card h4 {
+    font-size: 11pt;
+    font-weight: 700;
+    color: #1e293b;
+    margin-bottom: 8px;
+  }
+  .deep-card .fin-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 6px 16px;
+  }
+  .fin-item label {
+    font-size: 7pt;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    display: block;
+  }
+  .fin-item .val {
+    font-size: 9pt;
+    font-weight: 600;
+    color: #1e293b;
+  }
+  .deep-links {
+    margin-top: 10px;
+    font-size: 8pt;
+  }
+  .deep-links a {
+    color: #1d4ed8;
+    text-decoration: none;
+    margin-right: 14px;
+  }
+
+  /* ── Commodity / Index Row ─────────────────────────────────── */
+  .metric-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .metric-card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 10px 12px;
+    page-break-inside: avoid;
+  }
+  .metric-card .label {
+    font-size: 7.5pt;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    margin-bottom: 2px;
+  }
+  .metric-card .price {
+    font-size: 12pt;
+    font-weight: 700;
+    color: #1e293b;
+  }
+  .metric-card .change {
+    font-size: 8pt;
+    margin-top: 2px;
+  }
+  .metric-card .sub-changes {
+    font-size: 7pt;
+    color: #94a3b8;
+    margin-top: 2px;
+  }
+
+  /* ── Footer ────────────────────────────────────────────────── */
+  .footer {
+    margin-top: 30px;
+    padding-top: 12px;
+    border-top: 1px solid #e2e8f0;
+    font-size: 7pt;
+    color: #94a3b8;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!--  COVER                                                      -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div class="cover">
+  <h1>Daily Market Pulse</h1>
+  <div class="subtitle">Your Curated Financial Intelligence Brief</div>
+  <div class="date-line">
+    <span>{{ report_date }}</span>
+    {% if is_weekend %}
+      &nbsp;·&nbsp; Weekend Edition (Last Trading Day: {{ trading_date }})
+    {% endif %}
+  </div>
+  <div class="tagline">AI-curated analysis · {{ indian_stocks|length + us_stocks|length }} stocks · {{ commodities|length }} commodities · {{ indices|length }} indices</div>
+</div>
+
+{% if is_weekend %}
+<div class="weekend-banner">
+  <strong>Weekend Edition:</strong> Markets are closed. Commodity and stock prices shown are from the last trading session ({{ trading_date }}).
+  News articles are current.
+</div>
+{% endif %}
+
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!--  SECTION 1: INDIA                                           -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-header india-border">
+    <span class="flag">🇮🇳</span>
+    <h2>Indian Markets</h2>
+    <span class="desc">Nifty 50 · Top 15 Stocks · Commodities</span>
+  </div>
+
+  <!-- Indices -->
+  <div class="metric-grid">
+    {% for idx in indices if idx.key in ('nifty50', 'sensex') %}
+    <div class="metric-card">
+      <div class="label">{{ idx.name }}</div>
+      <div class="price">{{ fmt(idx.close, 2) }}</div>
+      <div class="change {{ change_class(idx.daily_change_pct) }}">
+        {{ change_arrow(idx.daily_change_pct) }} {{ fmt(idx.daily_change_pct, 2, suffix='%') }} today
+      </div>
+      <div class="sub-changes">
+        Month: {{ fmt(idx.monthly_change_pct, 2, suffix='%') }} · Year: {{ fmt(idx.yearly_change_pct, 2, suffix='%') }}
+      </div>
+    </div>
+    {% endfor %}
+    {% for c in commodities if c.key in ('gold', 'silver', 'crude_oil', 'gold_inr', 'silver_inr') %}
+    <div class="metric-card">
+      <div class="label">{{ c.name }} {{ c.unit }}</div>
+      <div class="price">{{ fmt(c.close, 2) }}</div>
+      <div class="change {{ change_class(c.daily_change_pct) }}">
+        {{ change_arrow(c.daily_change_pct) }} {{ fmt(c.daily_change_pct, 2, suffix='%') }} today
+      </div>
+      <div class="sub-changes">
+        Month: {{ fmt(c.monthly_change_pct, 2, suffix='%') }} · Year: {{ fmt(c.yearly_change_pct, 2, suffix='%') }}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Stock Table -->
+  <div class="sub-section">
+    <h3>Top 15 Indian Stocks</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Company</th>
+          <th>Mkt Cap</th>
+          <th>Open</th>
+          <th>Close</th>
+          <th>Prev Close</th>
+          <th>Day Chg</th>
+          <th>Month</th>
+          <th>Year</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in indian_stocks %}
+        <tr>
+          <td>{{ s.name }} <span class="ticker-label">{{ s.ticker }}</span></td>
+          <td>{{ s.market_cap_fmt }}</td>
+          <td>{{ fmt(s.open, 2, prefix='₹') }}</td>
+          <td>{{ fmt(s.close, 2, prefix='₹') }}</td>
+          <td>{{ fmt(s.day_before_close, 2, prefix='₹') }}</td>
+          <td class="{{ change_class(s.daily_change_pct) }}">{{ change_arrow(s.daily_change_pct) }} {{ fmt(s.daily_change_pct, 2, suffix='%') }}</td>
+          <td class="{{ change_class(s.monthly_change_pct) }}">{{ fmt(s.monthly_change_pct, 2, suffix='%') }}</td>
+          <td class="{{ change_class(s.yearly_change_pct) }}">{{ fmt(s.yearly_change_pct, 2, suffix='%') }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- DuPont Ratios -->
+  <div class="sub-section">
+    <h3>DuPont Analysis – Indian Stocks</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Company</th>
+          <th>ROE %</th>
+          <th>Net Margin %</th>
+          <th>Asset Turn.</th>
+          <th>Eq. Mult.</th>
+          <th>Tax Burden</th>
+          <th>Int. Burden</th>
+          <th>Op. Margin %</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in indian_stocks %}
+        <tr>
+          <td>{{ s.name }}</td>
+          <td>{{ fmt(s.roe, 2, suffix='%') }}</td>
+          <td>{{ fmt(s.net_profit_margin, 2, suffix='%') }}</td>
+          <td>{{ fmt(s.asset_turnover, 2, suffix='x') }}</td>
+          <td>{{ fmt(s.equity_multiplier, 2, suffix='x') }}</td>
+          <td>{{ fmt(s.tax_burden, 2) }}</td>
+          <td>{{ fmt(s.interest_burden, 2) }}</td>
+          <td>{{ fmt(s.operating_margin, 2, suffix='%') }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Indian News -->
+  <div class="sub-section">
+    <h3>Top Indian Financial News</h3>
+    {% if indian_news.summary %}
+    <div class="summary-box">
+      <h4>📊 Market Summary & Outlook</h4>
+      <p>{{ indian_news.summary }}</p>
+      {% if indian_news.outlook %}
+      <span class="outlook-tag">🔭 {{ indian_news.outlook }}</span>
+      {% endif %}
+    </div>
+    {% endif %}
+    <ol class="news-list">
+      {% for art in indian_news.articles %}
+      <li class="news-item {{ 'out-of-box' if art.is_out_of_box }}">
+        <div class="news-title">
+          <a href="{{ art.url }}">{{ art.title }}</a>
+        </div>
+        <div class="news-meta">
+          {{ art.source or art.feed_name }} 
+          {% if art.relevance_score %}<span class="news-score">{{ art.relevance_score }}/100</span>{% endif %}
+          {% if art.is_out_of_box %}<span class="news-oob-badge">OUT-OF-THE-BOX</span>{% endif %}
+        </div>
+        {% if art.one_line_reason %}
+        <div class="news-reason">→ {{ art.one_line_reason }}</div>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!--  SECTION 2: UNITED STATES                                   -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div class="section" style="page-break-before: always;">
+  <div class="section-header us-border">
+    <span class="flag">🇺🇸</span>
+    <h2>US Markets</h2>
+    <span class="desc">S&amp;P 500 · Top 15 Stocks</span>
+  </div>
+
+  <!-- Indices -->
+  <div class="metric-grid">
+    {% for idx in indices if idx.key in ('sp500', 'nasdaq', 'dowjones') %}
+    <div class="metric-card">
+      <div class="label">{{ idx.name }}</div>
+      <div class="price">{{ fmt(idx.close, 2) }}</div>
+      <div class="change {{ change_class(idx.daily_change_pct) }}">
+        {{ change_arrow(idx.daily_change_pct) }} {{ fmt(idx.daily_change_pct, 2, suffix='%') }} today
+      </div>
+      <div class="sub-changes">
+        Month: {{ fmt(idx.monthly_change_pct, 2, suffix='%') }} · Year: {{ fmt(idx.yearly_change_pct, 2, suffix='%') }}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Stock Table -->
+  <div class="sub-section">
+    <h3>Top 15 US Stocks</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Company</th>
+          <th>Mkt Cap</th>
+          <th>Open</th>
+          <th>Close</th>
+          <th>Prev Close</th>
+          <th>Day Chg</th>
+          <th>Month</th>
+          <th>Year</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in us_stocks %}
+        <tr>
+          <td>{{ s.name }} <span class="ticker-label">{{ s.ticker }}</span></td>
+          <td>{{ s.market_cap_fmt }}</td>
+          <td>{{ fmt(s.open, 2, prefix='$') }}</td>
+          <td>{{ fmt(s.close, 2, prefix='$') }}</td>
+          <td>{{ fmt(s.day_before_close, 2, prefix='$') }}</td>
+          <td class="{{ change_class(s.daily_change_pct) }}">{{ change_arrow(s.daily_change_pct) }} {{ fmt(s.daily_change_pct, 2, suffix='%') }}</td>
+          <td class="{{ change_class(s.monthly_change_pct) }}">{{ fmt(s.monthly_change_pct, 2, suffix='%') }}</td>
+          <td class="{{ change_class(s.yearly_change_pct) }}">{{ fmt(s.yearly_change_pct, 2, suffix='%') }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- DuPont Ratios -->
+  <div class="sub-section">
+    <h3>DuPont Analysis – US Stocks</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Company</th>
+          <th>ROE %</th>
+          <th>Net Margin %</th>
+          <th>Asset Turn.</th>
+          <th>Eq. Mult.</th>
+          <th>Tax Burden</th>
+          <th>Int. Burden</th>
+          <th>Op. Margin %</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in us_stocks %}
+        <tr>
+          <td>{{ s.name }}</td>
+          <td>{{ fmt(s.roe, 2, suffix='%') }}</td>
+          <td>{{ fmt(s.net_profit_margin, 2, suffix='%') }}</td>
+          <td>{{ fmt(s.asset_turnover, 2, suffix='x') }}</td>
+          <td>{{ fmt(s.equity_multiplier, 2, suffix='x') }}</td>
+          <td>{{ fmt(s.tax_burden, 2) }}</td>
+          <td>{{ fmt(s.interest_burden, 2) }}</td>
+          <td>{{ fmt(s.operating_margin, 2, suffix='%') }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- US News -->
+  <div class="sub-section">
+    <h3>Top US Financial News</h3>
+    {% if us_news.summary %}
+    <div class="summary-box">
+      <h4>📊 Market Summary & Outlook</h4>
+      <p>{{ us_news.summary }}</p>
+      {% if us_news.outlook %}
+      <span class="outlook-tag">🔭 {{ us_news.outlook }}</span>
+      {% endif %}
+    </div>
+    {% endif %}
+    <ol class="news-list">
+      {% for art in us_news.articles %}
+      <li class="news-item {{ 'out-of-box' if art.is_out_of_box }}">
+        <div class="news-title">
+          <a href="{{ art.url }}">{{ art.title }}</a>
+        </div>
+        <div class="news-meta">
+          {{ art.source or art.feed_name }}
+          {% if art.relevance_score %}<span class="news-score">{{ art.relevance_score }}/100</span>{% endif %}
+          {% if art.is_out_of_box %}<span class="news-oob-badge">OUT-OF-THE-BOX</span>{% endif %}
+        </div>
+        {% if art.one_line_reason %}
+        <div class="news-reason">→ {{ art.one_line_reason }}</div>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!--  SECTION 3: INTERNATIONAL                                   -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div class="section" style="page-break-before: always;">
+  <div class="section-header intl-border">
+    <span class="flag">🌍</span>
+    <h2>International Markets</h2>
+    <span class="desc">Global Commodities · FTSE 100 · Key News</span>
+  </div>
+
+  <!-- Global Indices & Commodities -->
+  <div class="metric-grid">
+    {% for idx in indices if idx.key in ('ftse100',) %}
+    <div class="metric-card">
+      <div class="label">{{ idx.name }}</div>
+      <div class="price">{{ fmt(idx.close, 2) }}</div>
+      <div class="change {{ change_class(idx.daily_change_pct) }}">
+        {{ change_arrow(idx.daily_change_pct) }} {{ fmt(idx.daily_change_pct, 2, suffix='%') }} today
+      </div>
+      <div class="sub-changes">
+        Month: {{ fmt(idx.monthly_change_pct, 2, suffix='%') }} · Year: {{ fmt(idx.yearly_change_pct, 2, suffix='%') }}
+      </div>
+    </div>
+    {% endfor %}
+    {% for c in commodities if c.key in ('brent', 'natural_gas', 'copper') %}
+    <div class="metric-card">
+      <div class="label">{{ c.name }} {{ c.unit }}</div>
+      <div class="price">{{ fmt(c.close, 2) }}</div>
+      <div class="change {{ change_class(c.daily_change_pct) }}">
+        {{ change_arrow(c.daily_change_pct) }} {{ fmt(c.daily_change_pct, 2, suffix='%') }} today
+      </div>
+      <div class="sub-changes">
+        Month: {{ fmt(c.monthly_change_pct, 2, suffix='%') }} · Year: {{ fmt(c.yearly_change_pct, 2, suffix='%') }}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- All Commodities Table -->
+  {% if commodities %}
+  <div class="sub-section">
+    <h3>Global Commodities Overview</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Commodity</th>
+          <th>Price</th>
+          <th>Open</th>
+          <th>Day Change</th>
+          <th>Month Change</th>
+          <th>Year Change</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in commodities %}
+        <tr>
+          <td>{{ c.name }}</td>
+          <td>{{ fmt(c.close, 2) }} {{ c.unit }}</td>
+          <td>{{ fmt(c.open, 2) }}</td>
+          <td class="{{ change_class(c.daily_change_pct) }}">{{ change_arrow(c.daily_change_pct) }} {{ fmt(c.daily_change_pct, 2, suffix='%') }}</td>
+          <td class="{{ change_class(c.monthly_change_pct) }}">{{ fmt(c.monthly_change_pct, 2, suffix='%') }}</td>
+          <td class="{{ change_class(c.yearly_change_pct) }}">{{ fmt(c.yearly_change_pct, 2, suffix='%') }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  <!-- International News -->
+  <div class="sub-section">
+    <h3>Key International News</h3>
+    {% if intl_news.summary %}
+    <div class="summary-box">
+      <h4>🌐 Global Summary & Outlook</h4>
+      <p>{{ intl_news.summary }}</p>
+      {% if intl_news.outlook %}
+      <span class="outlook-tag">🔭 {{ intl_news.outlook }}</span>
+      {% endif %}
+    </div>
+    {% endif %}
+    <ol class="news-list">
+      {% for art in intl_news.articles %}
+      <li class="news-item {{ 'out-of-box' if art.is_out_of_box }}">
+        <div class="news-title">
+          <a href="{{ art.url }}">{{ art.title }}</a>
+        </div>
+        <div class="news-meta">
+          {{ art.source or art.feed_name }}
+          {% if art.relevance_score %}<span class="news-score">{{ art.relevance_score }}/100</span>{% endif %}
+          {% if art.is_out_of_box %}<span class="news-oob-badge">OUT-OF-THE-BOX</span>{% endif %}
+        </div>
+        {% if art.one_line_reason %}
+        <div class="news-reason">→ {{ art.one_line_reason }}</div>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+  </div>
+</div>
+
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!--  SECTION 4: DEEP DIVE                                       -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div class="section" style="page-break-before: always;">
+  <div class="section-header deep-border">
+    <span class="flag">📊</span>
+    <h2>Deep Dive – Financial Statement Analysis</h2>
+    <span class="desc">Rotating daily: One Indian + One US top company</span>
+  </div>
+
+  <p style="font-size: 8.5pt; color: #475569; margin-bottom: 16px;">
+    Each day we spotlight a different top company's annual financials for your review.
+    Use the links below to access the full annual report and SEC/BSE filings.
+  </p>
+
+  <!-- Indian Company -->
+  <div class="deep-card">
+    <h4>🇮🇳 {{ deep_dive.indian.name }} <span style="font-weight:400; font-size:9pt; color:#64748b;">({{ deep_dive.indian.ticker }})</span></h4>
+    <div class="fin-grid">
+      <div class="fin-item">
+        <label>Revenue</label>
+        <div class="val">{{ deep_dive.indian.revenue }}</div>
+      </div>
+      <div class="fin-item">
+        <label>Net Income</label>
+        <div class="val">{{ deep_dive.indian.net_income }}</div>
+      </div>
+      <div class="fin-item">
+        <label>EBITDA</label>
+        <div class="val">{{ deep_dive.indian.ebitda }}</div>
+      </div>
+      <div class="fin-item">
+        <label>Total Assets</label>
+        <div class="val">{{ deep_dive.indian.total_assets }}</div>
+      </div>
+      <div class="fin-item">
+        <label>Total Debt</label>
+        <div class="val">{{ deep_dive.indian.total_debt }}</div>
+      </div>
+      <div class="fin-item">
+        <label>Free Cash Flow</label>
+        <div class="val">{{ deep_dive.indian.free_cashflow }}</div>
+      </div>
+    </div>
+    <div class="deep-links">
+      📄 <a href="{{ deep_dive.indian.filing_url }}">BSE Filing Page</a>
+      📑 <a href="{{ deep_dive.indian.sec_url }}">Annual Report / Announcements</a>
+    </div>
+  </div>
+
+  <!-- US Company -->
+  <div class="deep-card">
+    <h4>🇺🇸 {{ deep_dive.us.name }} <span style="font-weight:400; font-size:9pt; color:#64748b;">({{ deep_dive.us.ticker }})</span></h4>
+    <div class="fin-grid">
+      <div class="fin-item">
+        <label>Revenue</label>
+        <div class="val">{{ deep_dive.us.revenue }}</div>
+      </div>
+      <div class="fin-item">
+        <label>Net Income</label>
+        <div class="val">{{ deep_dive.us.net_income }}</div>
+      </div>
+      <div class="fin-item">
+        <label>EBITDA</label>
+        <div class="val">{{ deep_dive.us.ebitda }}</div>
+      </div>
+      <div class="fin-item">
+        <label>Total Assets</label>
+        <div class="val">{{ deep_dive.us.total_assets }}</div>
+      </div>
+      <div class="fin-item">
+        <label>Total Debt</label>
+        <div class="val">{{ deep_dive.us.total_debt }}</div>
+      </div>
+      <div class="fin-item">
+        <label>Free Cash Flow</label>
+        <div class="val">{{ deep_dive.us.free_cashflow }}</div>
+      </div>
+    </div>
+    <div class="deep-links">
+      📄 <a href="{{ deep_dive.us.filing_url }}">Investor Relations / SEC Filings</a>
+      📑 <a href="{{ deep_dive.us.sec_url }}">10-K Annual Report (EDGAR)</a>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!--  FOOTER                                                     -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div class="footer">
+  Daily Market Pulse · Generated {{ generated_at }} · AI-curated by GPT-4o-mini
+  <br>
+  Data sources: Yahoo Finance, BSE India, SEC EDGAR · News: RSS aggregation from FT, WSJ, ET, Bloomberg, Reuters & others
+  <br>
+  This report is for informational purposes only and does not constitute financial advice.
+</div>
+
+</body>
+</html>

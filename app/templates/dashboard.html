@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Daily Market Pulse — Dashboard</title>
+<style>
+  :root {
+    --bg: #f8fafc; --card: #ffffff; --border: #e2e8f0;
+    --text: #1e293b; --muted: #64748b; --accent: #1d4ed8;
+    --accent-light: #dbeafe; --success: #16a34a; --danger: #dc2626;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.5;
+  }
+
+  /* Header */
+  .header {
+    background: linear-gradient(135deg, #0f172a, #1e3a5f);
+    color: #fff; padding: 28px 32px;
+  }
+  .header h1 { font-size: 22px; font-weight: 800; }
+  .header p { color: #94a3b8; font-size: 14px; margin-top: 4px; }
+
+  .container { max-width: 900px; margin: 0 auto; padding: 24px 16px; }
+
+  /* Cards */
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 24px; margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .card h2 {
+    font-size: 16px; font-weight: 700; margin-bottom: 16px;
+    color: var(--text); display: flex; align-items: center; gap: 8px;
+  }
+  .card h2 .icon { font-size: 20px; }
+
+  /* Form */
+  .form-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+  input[type="text"], input[type="email"] {
+    flex: 1; min-width: 200px; padding: 10px 14px;
+    border: 1px solid var(--border); border-radius: 6px; font-size: 14px;
+    outline: none; transition: border-color 0.2s;
+  }
+  input:focus { border-color: var(--accent); }
+  .btn {
+    padding: 10px 20px; border: none; border-radius: 6px;
+    font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #1e40af; }
+  .btn-danger { background: #fee2e2; color: var(--danger); }
+  .btn-danger:hover { background: #fecaca; }
+  .btn-success { background: #dcfce7; color: var(--success); }
+  .btn-success:hover { background: #bbf7d0; }
+  .btn-outline {
+    background: transparent; border: 1px solid var(--border);
+    color: var(--muted);
+  }
+  .btn-outline:hover { background: var(--bg); }
+
+  /* Table */
+  .table-wrap { overflow-x: auto; }
+  table {
+    width: 100%; border-collapse: collapse; font-size: 14px;
+  }
+  th {
+    text-align: left; padding: 10px 12px;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--muted); border-bottom: 2px solid var(--border);
+  }
+  td {
+    padding: 10px 12px; border-bottom: 1px solid #f1f5f9;
+  }
+  .status-active { color: var(--success); font-weight: 600; }
+  .status-inactive { color: var(--danger); font-weight: 600; }
+  .status-sent { color: var(--success); }
+  .status-failed { color: var(--danger); }
+
+  .actions { display: flex; gap: 6px; }
+  .actions form { margin: 0; }
+
+  /* Trigger Section */
+  .trigger-section {
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  }
+  .trigger-section .note {
+    font-size: 13px; color: var(--muted); font-style: italic;
+  }
+
+  @media (max-width: 640px) {
+    .form-row { flex-direction: column; }
+    .trigger-section { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>📊 Daily Market Pulse</h1>
+  <p>Manage your mailing list and trigger reports</p>
+</div>
+
+<div class="container">
+
+  <!-- Add Recipient -->
+  <div class="card">
+    <h2><span class="icon">📬</span> Add Recipient</h2>
+    <form method="post" action="/add-recipient">
+      <div class="form-row">
+        <input type="email" name="email" placeholder="Email address" required>
+        <input type="text" name="name" placeholder="Name (optional)">
+        <button type="submit" class="btn btn-primary">Add</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Mailing List -->
+  <div class="card">
+    <h2><span class="icon">👥</span> Mailing List</h2>
+    {% if recipients %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Email</th>
+            <th>Name</th>
+            <th>Status</th>
+            <th>Added</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in recipients %}
+          <tr>
+            <td>{{ r.email }}</td>
+            <td>{{ r.name or '—' }}</td>
+            <td>
+              {% if r.active %}
+                <span class="status-active">Active</span>
+              {% else %}
+                <span class="status-inactive">Inactive</span>
+              {% endif %}
+            </td>
+            <td style="font-size:12px; color: var(--muted)">{{ r.created_at }}</td>
+            <td>
+              <div class="actions">
+                {% if r.active %}
+                <form method="post" action="/toggle-recipient">
+                  <input type="hidden" name="email" value="{{ r.email }}">
+                  <input type="hidden" name="active" value="0">
+                  <button class="btn btn-outline" type="submit" title="Pause">⏸</button>
+                </form>
+                {% else %}
+                <form method="post" action="/toggle-recipient">
+                  <input type="hidden" name="email" value="{{ r.email }}">
+                  <input type="hidden" name="active" value="1">
+                  <button class="btn btn-success" type="submit" title="Activate">▶</button>
+                </form>
+                {% endif %}
+                <form method="post" action="/remove-recipient" onsubmit="return confirm('Remove this recipient?')">
+                  <input type="hidden" name="email" value="{{ r.email }}">
+                  <button class="btn btn-danger" type="submit" title="Remove">✕</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p style="color: var(--muted); font-size: 14px;">No recipients yet. Add one above to get started.</p>
+    {% endif %}
+  </div>
+
+  <!-- Report Controls -->
+  <div class="card">
+    <h2><span class="icon">🚀</span> Report Controls</h2>
+    <div class="trigger-section">
+      <form method="post" action="/trigger-report">
+        <button type="submit" class="btn btn-primary" onclick="this.disabled=true; this.innerText='Generating...'; this.form.submit();">
+          Generate &amp; Send Now
+        </button>
+      </form>
+      <a href="/download-latest" class="btn btn-outline">📥 Download Latest PDF</a>
+      <span class="note">Reports are automatically sent daily at the configured time.</span>
+    </div>
+  </div>
+
+  <!-- Recent Reports -->
+  <div class="card">
+    <h2><span class="icon">📋</span> Recent Reports</h2>
+    {% if recent_reports %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Status</th>
+            <th>File</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in recent_reports %}
+          <tr>
+            <td>{{ r.date }}</td>
+            <td class="status-{{ r.status }}">{{ r.status }}</td>
+            <td style="font-size:12px; color: var(--muted)">{{ r.filepath or '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p style="color: var(--muted); font-size: 14px;">No reports generated yet.</p>
+    {% endif %}
+  </div>
+
+</div>
+</body>
+</html>

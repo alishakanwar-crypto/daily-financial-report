@@ -2,6 +2,27 @@
 
 Automated daily financial intelligence report delivered to your inbox as a beautiful, interactive PDF.
 
+## Indian Solar Industry Intelligence
+
+The same service also generates a dedicated green-themed, clickable PDF for
+competitive analysis of **ReNew Energy Global, Waaree Energies, Premier
+Energies, Vikram Solar, and Emmvee Solar**.
+
+- Previous completed trading day's open, close, average, high, low, change and volume
+- Valuation, profitability, liquidity, leverage, efficiency and cash-flow ratios
+- Latest financial-statement date shown beside every company
+- SQLite ratio snapshots refreshed on each run and versioned for every new statement period
+- Indian solar/alternative-energy news prioritised to the previous 24 hours
+- MNRE, PIB, Ministry of Power, CEA, SEBI and policy/regulatory monitoring
+- AI-generated impact analysis tailored to an Indian solar-industry operator
+- Clickable feedback link in every PDF; feedback becomes durable preference memory
+  for subsequent AI curation
+- Admin-only JSONL export for optional reviewed OpenAI fine-tuning
+
+The solar report is scheduled daily at **07:30 IST**. Its admin dashboard is
+available at `/solar?token=<APP_SECRET>`, with manual generation, downloads,
+recipient management and AI-feedback review.
+
 ## What You Get
 
 Every morning, a professionally designed PDF arrives in your inbox with **four segments**:

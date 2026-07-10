@@ -30,6 +30,7 @@ tr:nth-child(even) td { background:#f7fbf8; }
 .company { font-weight:800; color:#075f36; }
 .ticker { color:#7a9184; font-size:6.7px; }
 .converted { color:#08783f; font-size:6.5px; white-space:nowrap; margin-top:1px; }
+.cash-table .converted { font-size:5px; }
 .positive { color:#08783f; font-weight:700; }.negative { color:#b52b2b; font-weight:700; }.mixed { color:#bd7400; font-weight:700; }.neutral { color:#60756a; }
 .metric-grid { display:flex; gap:7px; flex-wrap:wrap; margin:8px 0 12px; }
 .metric { width:31.8%; background:#f4faf6; border:1px solid #d6eadc; border-radius:7px; padding:8px; }
@@ -113,10 +114,14 @@ tr:nth-child(even) td { background:#f7fbf8; }
   </table>
 
   <h3 style="color:#075f36">Cash Flow Quality</h3>
-  <table>
+  <table class="cash-table">
     <thead><tr><th>Company</th><th>Operating cash flow</th><th>Free cash flow</th><th>OCF margin</th><th>FCF margin</th><th>Cash conversion (OCF/NI)</th><th>Capex / Revenue</th><th>Total debt</th><th>Cash</th></tr></thead>
     <tbody>{% for r in ratios if not r.unlisted %}<tr><td class="company">{{ r.name }}<div class="ticker">{{ r.financial_currency }} • {{ r.statement_date }}</div></td>
-      <td>{{ r.operating_cf|money_dual(r.financial_currency, prices.usd_inr_rate) }}</td><td>{{ r.free_cf|money_dual(r.financial_currency, prices.usd_inr_rate) }}</td><td>{{ r.operating_cf_margin|num }}%</td><td>{{ r.fcf_margin|num }}%</td><td>{{ r.cash_conversion|num }}x</td><td>{{ r.capex_to_revenue|num }}%</td><td>{{ r.total_debt|money_dual(r.financial_currency, prices.usd_inr_rate) }}</td><td>{{ r.cash|money_dual(r.financial_currency, prices.usd_inr_rate) }}</td></tr>{% endfor %}</tbody>
+      <td>{{ r.operating_cf|money(r.financial_currency) }}{% if r.financial_currency == 'USD' and r.operating_cf is not none and prices.usd_inr_rate is not none %}<div class="converted">{{ (r.operating_cf * prices.usd_inr_rate)|money('INR') }}</div>{% endif %}</td>
+      <td>{{ r.free_cf|money(r.financial_currency) }}{% if r.financial_currency == 'USD' and r.free_cf is not none and prices.usd_inr_rate is not none %}<div class="converted">{{ (r.free_cf * prices.usd_inr_rate)|money('INR') }}</div>{% endif %}</td>
+      <td>{{ r.operating_cf_margin|num }}%</td><td>{{ r.fcf_margin|num }}%</td><td>{{ r.cash_conversion|num }}x</td><td>{{ r.capex_to_revenue|num }}%</td>
+      <td>{{ r.total_debt|money(r.financial_currency) }}{% if r.financial_currency == 'USD' and r.total_debt is not none and prices.usd_inr_rate is not none %}<div class="converted">{{ (r.total_debt * prices.usd_inr_rate)|money('INR') }}</div>{% endif %}</td>
+      <td>{{ r.cash|money(r.financial_currency) }}{% if r.financial_currency == 'USD' and r.cash is not none and prices.usd_inr_rate is not none %}<div class="converted">{{ (r.cash * prices.usd_inr_rate)|money('INR') }}</div>{% endif %}</td></tr>{% endfor %}</tbody>
   </table>
   <div class="note"><strong>Automatic updates:</strong> ratios are recalculated on every report run. A dated SQLite snapshot is added whenever a company publishes a statement with a new period end; existing period snapshots are refreshed for feed corrections.</div>
 </section>

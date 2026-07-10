@@ -13,8 +13,12 @@ primary_region = "sin"
 [env]
   REPORT_HOUR_IST = "7"
   REPORT_MINUTE_IST = "0"
+  SOLAR_REPORT_HOUR_IST = "10"
+  SOLAR_REPORT_MINUTE_IST = "0"
   TIMEZONE = "Asia/Kolkata"
   DB_PATH = "/app/data/app.db"
+  SOLAR_DB_PATH = "/app/data/solar.db"
+  BASE_URL = "https://daily-market-pulse.fly.dev"
 
 [mounts]
   source = "data"

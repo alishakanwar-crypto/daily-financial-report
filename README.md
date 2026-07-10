@@ -22,6 +22,11 @@ Energies, Vikram Solar, and Emmvee Solar**.
 The solar report is scheduled daily at **10:00 AM IST**. Its admin dashboard is
 available at `/solar?token=<APP_SECRET>`, with manual generation, downloads,
 recipient management (including pause/resume controls) and AI-feedback review.
+The focused mailing-list dashboard is available at
+`/solar/mailing-list?token=<APP_SECRET>`. Adding a recipient immediately sends
+the latest available report, then includes them in the daily 10:00 AM IST run.
+USD/INR equivalents are refreshed on every report using the latest completed
+currency-market trading day, with the rate and date printed in the PDF.
 
 ## What You Get
 

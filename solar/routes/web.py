@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from datetime import datetime
 from urllib.parse import urlencode
 
@@ -14,11 +15,18 @@ from fastapi.templating import Jinja2Templates
 
 from solar.config import settings
 from solar.database import (
+    add_company,
     add_recipient,
+    add_supplementary_topic,
+    company_rows,
+    delete_supplementary_topic,
     feedback_for_export,
     get_db,
     save_feedback,
+    set_company_active,
     set_recipient_active,
+    set_supplementary_topic_active,
+    supplementary_topic_rows,
 )
 
 log = logging.getLogger(__name__)
@@ -40,7 +48,12 @@ def _back(
     status: str = "",
     destination: str = "/solar",
 ) -> RedirectResponse:
-    if destination not in {"/solar", "/solar/mailing-list"}:
+    if destination not in {
+        "/solar",
+        "/solar/mailing-list",
+        "/solar/companies",
+        "/solar/topics",
+    }:
         destination = "/solar"
     args = {"token": token}
     if status:
@@ -98,6 +111,146 @@ async def mailing_list_dashboard(request: Request):
         ),
         "status": request.query_params.get("status", ""),
     })
+
+
+@router.get("/companies", response_class=HTMLResponse)
+async def company_dashboard(request: Request):
+    token = _token(request)
+    _auth(token)
+    companies = await company_rows()
+    return templates.TemplateResponse("companies.html", {
+        "request": request,
+        "token": token,
+        "companies": companies,
+        "active_count": sum(1 for company in companies if company["active"]),
+        "removed_count": sum(1 for company in companies if not company["active"]),
+        "status": request.query_params.get("status", ""),
+    })
+
+
+@router.get("/topics", response_class=HTMLResponse)
+async def topic_dashboard(request: Request):
+    token = _token(request)
+    _auth(token)
+    topics = await supplementary_topic_rows()
+    return templates.TemplateResponse("topics.html", {
+        "request": request,
+        "token": token,
+        "topics": topics,
+        "active_count": sum(1 for topic in topics if topic["active"]),
+        "status": request.query_params.get("status", ""),
+    })
+
+
+def _normalized_ticker(ticker: str, exchange: str) -> str:
+    value = ticker.strip().upper()
+    if exchange == "NSE" and not value.endswith(".NS"):
+        value += ".NS"
+    elif exchange == "BSE" and not value.endswith(".BO"):
+        value += ".BO"
+    return value
+
+
+@router.post("/companies")
+async def create_company(
+    request: Request,
+    name: str = Form(...),
+    ticker: str = Form(...),
+    exchange: str = Form("NSE"),
+    currency: str = Form(""),
+    website: str = Form(""),
+    note: str = Form(""),
+    token: str = Form(""),
+):
+    tk = _token(request, token)
+    _auth(tk)
+    name = name.strip()
+    exchange = exchange.strip().upper()
+    ticker = _normalized_ticker(ticker, exchange)
+    website = website.strip()
+    currency = currency.strip().upper() or (
+        "INR" if exchange in {"NSE", "BSE"} else "USD"
+    )
+    if not name or not ticker or not exchange:
+        raise HTTPException(400, "Name, ticker and exchange are required")
+    if currency not in {"INR", "USD"}:
+        raise HTTPException(400, "Currency must be INR or USD")
+    if not re.fullmatch(r"[A-Z0-9.^=_&-]+", ticker):
+        raise HTTPException(400, "Ticker contains unsupported characters")
+    if website and not website.lower().startswith(("https://", "http://")):
+        raise HTTPException(400, "Website must start with http:// or https://")
+    await add_company(
+        name=name,
+        ticker=ticker,
+        currency=currency,
+        exchange=exchange,
+        website=website,
+        note=note.strip(),
+    )
+    return _back(
+        tk,
+        f"{name} added; listing verification runs with the next report",
+        "/solar/companies",
+    )
+
+
+@router.post("/companies/toggle")
+async def toggle_company(
+    request: Request,
+    company_id: int = Form(...),
+    active: int = Form(...),
+    token: str = Form(""),
+):
+    tk = _token(request, token)
+    _auth(tk)
+    await set_company_active(company_id, bool(active))
+    status = "Company restored" if active else "Company removed from future reports"
+    return _back(tk, status, "/solar/companies")
+
+
+@router.post("/topics")
+async def create_topic(
+    request: Request,
+    name: str = Form(...),
+    query: str = Form(...),
+    token: str = Form(""),
+):
+    tk = _token(request, token)
+    _auth(tk)
+    name = name.strip()
+    query = query.strip()
+    if not name or not query:
+        raise HTTPException(400, "Topic name and search query are required")
+    if len(name) > 80 or len(query) > 220:
+        raise HTTPException(400, "Topic name or search query is too long")
+    await add_supplementary_topic(name, query)
+    return _back(tk, f"{name} added to the supplementary section", "/solar/topics")
+
+
+@router.post("/topics/toggle")
+async def toggle_topic(
+    request: Request,
+    topic_id: int = Form(...),
+    active: int = Form(...),
+    token: str = Form(""),
+):
+    tk = _token(request, token)
+    _auth(tk)
+    await set_supplementary_topic_active(topic_id, bool(active))
+    status = "Topic added to the report" if active else "Topic removed from the report"
+    return _back(tk, status, "/solar/topics")
+
+
+@router.post("/topics/delete")
+async def delete_topic(
+    request: Request,
+    topic_id: int = Form(...),
+    token: str = Form(""),
+):
+    tk = _token(request, token)
+    _auth(tk)
+    await delete_supplementary_topic(topic_id)
+    return _back(tk, "Custom topic deleted", "/solar/topics")
 
 
 def _latest_report() -> tuple[str, str] | None:

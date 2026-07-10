@@ -58,13 +58,13 @@ tr:nth-child(even) td { background:#f7fbf8; }
   <h1>Solar Industry<br><span>Intelligence Report</span></h1>
   <div class="lead">Market prices, financial strength, cash-flow quality, policy developments and AI-curated competitive news — built for an Indian solar industry operator.</div>
   <div class="date">{{ report_date }}</div>
-  <div class="companies">TRACKING &nbsp; ReNew Energy Global &nbsp;•&nbsp; Waaree Energies &nbsp;•&nbsp; Premier Energies &nbsp;•&nbsp; Vikram Solar &nbsp;•&nbsp; Emmvee Solar</div>
+  <div class="companies">TRACKING &nbsp; {% for company in companies %}{{ company.name }}{% if not loop.last %} &nbsp;•&nbsp; {% endif %}{% endfor %}</div>
 </section>
 
 <section>
   <div class="section-kicker">01 • Market Monitor</div>
   <h2 class="page-title">Previous Trading Day</h2>
-  <p class="subtitle">{{ prices.trading_date }} • Publicly listed companies only • RNW is quoted in USD with INR equivalents; Indian listings in INR.{% if prices.usd_inr_rate is not none %} Conversion: USD 1 = ₹{{ prices.usd_inr_rate|num }} ({{ prices.usd_inr_date }}).{% endif %}</p>
+  <p class="subtitle">{{ prices.trading_date }} • Publicly listed companies only • USD listings include INR equivalents; Indian listings remain in INR.{% if prices.usd_inr_rate is not none %} Conversion: USD 1 = ₹{{ prices.usd_inr_rate|num }} ({{ prices.usd_inr_date }}).{% endif %}</p>
   <table>
     <thead><tr><th>Company</th><th>Open</th><th>Close</th><th>Average*</th><th>High</th><th>Low</th><th>Day change</th><th>Volume</th></tr></thead>
     <tbody>{% for p in prices.rows %}<tr>
@@ -79,7 +79,7 @@ tr:nth-child(even) td { background:#f7fbf8; }
     </tr>{% endfor %}</tbody>
   </table>
   <div class="note"><strong>*Average price methodology:</strong> intraday volume-weighted average (VWAP) where Yahoo Finance provides 5-minute data; otherwise daily typical price (High + Low + Close) ÷ 3. The method is recorded for every company.</div>
-  <div class="note warning"><strong>Emmvee Solar:</strong> private/unlisted at report time; therefore no exchange-traded price is shown. It remains fully tracked for competitive and news intelligence.</div>
+  {% for company in companies if not company.listed %}<div class="note warning"><strong>{{ company.name }}:</strong> private/unlisted at report time; therefore no exchange-traded price is shown. It remains tracked for competitive and news intelligence.</div>{% endfor %}
 
   <div class="section-kicker" style="margin-top:15px">Quick comparison</div>
   <div class="metric-grid">
@@ -151,7 +151,23 @@ tr:nth-child(even) td { background:#f7fbf8; }
     <div class="news-meta">{{ a.source }} • {{ a.published.strftime('%d-%m-%Y %H:%M IST') if a.published else 'Publication time unavailable' }}{% if a.companies_affected %} • Affects: {{ a.companies_affected|join(', ') }}{% endif %}</div>
     <div class="why"><strong>Why it matters:</strong> {{ a.one_line_why }}</div><div class="takeaway"><strong>Investor / operator takeaway:</strong> {{ a.investor_takeaway }}</div>
   </article>{% else %}<div class="note">No qualifying new government or policy item found in the monitored window.</div>{% endfor %}
+</section>
 
+{% if supplementary.topics %}<section class="page-break">
+  <div class="section-kicker">05 • Editor-Selected Supplement</div>
+  <h2 class="page-title">Supplementary Intelligence</h2>
+  <p class="subtitle">Selected topics: {{ supplementary.topics|map(attribute='name')|join(', ') }}. Kept separate from core solar and policy coverage.</p>
+  <div class="summary"><strong>AI Supplementary View:</strong> {{ supplementary.executive_summary }}</div>
+  {% if supplementary.watch_items %}<div class="card"><strong>What to watch next</strong><ul class="watch">{% for item in supplementary.watch_items %}<li>{{ item }}</li>{% endfor %}</ul></div>{% endif %}
+  {% for a in supplementary.articles %}<article class="news">
+    <div><span class="badge">{{ a.topic_name }}</span> <span class="badge {% if a.recency != 'Last 24 hours' %}context{% endif %}">{{ a.recency }}</span> <span class="impact {{ a.impact|impact_class }}">{{ a.impact }}</span> <span class="badge">Impact {{ a.impact_score }}/100</span></div>
+    <div class="news-title"><a href="{{ a.url }}">{{ a.title }}</a></div>
+    <div class="news-meta">{{ a.source }} • {{ a.published.strftime('%d-%m-%Y %H:%M IST') if a.published else 'Publication time unavailable' }}</div>
+    <div class="why"><strong>Why it matters:</strong> {{ a.one_line_why }}</div><div class="takeaway"><strong>Business takeaway:</strong> {{ a.investor_takeaway }}</div>
+  </article>{% else %}<div class="note">No qualifying new stories found for the selected supplementary topics.</div>{% endfor %}
+</section>{% endif %}
+
+<section>
   <div class="feedback">
     <strong>Help this report learn what matters to your business.</strong><br>
     Rate relevance, flag weak stories, and request metrics. Your feedback becomes preference memory for the next AI-curated report.<br>

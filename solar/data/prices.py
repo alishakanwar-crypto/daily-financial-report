@@ -14,6 +14,10 @@ from solar.config import IST, Company, listed_companies
 log = logging.getLogger(__name__)
 
 
+class PossibleDelistingError(ValueError):
+    pass
+
+
 def _safe(v) -> Optional[float]:
     try:
         f = float(v)
@@ -63,8 +67,24 @@ def _chart_price(company: Company, now_ist: datetime) -> dict:
         headers={"User-Agent": "Mozilla/5.0"},
         timeout=20,
     )
+    try:
+        payload = response.json()
+    except ValueError:
+        response.raise_for_status()
+        raise ValueError("Yahoo chart returned invalid JSON")
+    chart = payload.get("chart", {})
+    error = chart.get("error")
+    if error:
+        description = error.get("description", "Yahoo chart error")
+        normalized = description.lower()
+        if "delisted" in normalized or "no data found" in normalized:
+            raise PossibleDelistingError(description)
+        raise ValueError(description)
     response.raise_for_status()
-    result = response.json()["chart"]["result"][0]
+    results = chart.get("result") or []
+    if not results:
+        raise ValueError("Yahoo chart returned no result")
+    result = results[0]
     quote = result["indicators"]["quote"][0]
     records = []
 
@@ -142,7 +162,7 @@ def _usd_inr_rate(now_ist: datetime) -> tuple[Optional[float], Optional[str]]:
     raise ValueError(f"USD/INR chart returned no completed trading day: {last_error}")
 
 
-def fetch_prices() -> dict:
+def fetch_prices(companies: Optional[list[Company]] = None) -> dict:
     """Return yesterday's OHLC + average for each listed company.
 
     "Yesterday" = the most recent completed trading day relative to now (IST).
@@ -157,7 +177,7 @@ def fetch_prices() -> dict:
     except Exception as e:  # noqa: BLE001
         log.error(f"USD/INR conversion fetch failed: {e}")
 
-    for company in listed_companies():
+    for company in listed_companies(companies):
         row = {
             "name": company.name,
             "ticker": company.ticker,
@@ -174,6 +194,7 @@ def fetch_prices() -> dict:
             "prev_close": None,
             "change_pct": None,
             "trade_date": None,
+            "delisting_signal": False,
         }
         try:
             tk = yf.Ticker(company.ticker)
@@ -199,9 +220,9 @@ def fetch_prices() -> dict:
 
             avg, method = _average_price(tk, trade_date)
             if avg is None:
-                h, l, c = row["high"], row["low"], row["close"]
-                if None not in (h, l, c):
-                    avg = round((h + l + c) / 3, 2)
+                high, low, close = row["high"], row["low"], row["close"]
+                if None not in (high, low, close):
+                    avg = round((high + low + close) / 3, 2)
             row["average"] = avg
             row["avg_method"] = method
             if trading_date_label is None:
@@ -213,6 +234,14 @@ def fetch_prices() -> dict:
                 row.update(_chart_price(company, now_ist))
                 if trading_date_label is None:
                     trading_date_label = row["trade_date"]
+            except PossibleDelistingError as e:
+                row["delisting_signal"] = True
+                row["listing_error"] = str(e)
+                log.warning(
+                    "Possible delisting signal for %s: %s",
+                    company.ticker,
+                    e,
+                )
             except Exception as e:  # noqa: BLE001
                 log.error(f"Yahoo chart fallback failed for {company.ticker}: {e}")
         rows.append(row)

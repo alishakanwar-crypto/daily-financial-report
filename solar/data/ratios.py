@@ -10,7 +10,7 @@ from typing import Optional
 import httpx
 import yfinance as yf
 
-from solar.config import COMPANIES, Company, IST, listed_companies
+from solar.config import DEFAULT_COMPANIES, Company, IST, listed_companies
 from solar.database import save_ratio_snapshot
 
 log = logging.getLogger(__name__)
@@ -276,10 +276,13 @@ def _company_ratios_fallback(company: Company) -> dict:
     }
 
 
-async def fetch_and_store_ratios() -> list[dict]:
+async def fetch_and_store_ratios(
+    companies: Optional[list[Company]] = None,
+) -> list[dict]:
     """Fetch current ratios and upsert one snapshot per statement date."""
+    source = companies if companies is not None else DEFAULT_COMPANIES
     rows = []
-    for company in listed_companies():
+    for company in listed_companies(source):
         try:
             row = _company_ratios(company)
             if row["statement_date"] == "N/A" or row["revenue"] is None:
@@ -304,8 +307,8 @@ async def fetch_and_store_ratios() -> list[dict]:
                     "error": str(fallback_error),
                 })
     # Include unlisted company explicitly to avoid implying missing coverage.
-    for company in COMPANIES:
-        if not company.listed:
+    for company in source:
+        if company.active and not company.listed:
             rows.append({
                 "name": company.name,
                 "ticker": None,

@@ -11,7 +11,7 @@ import feedparser
 import httpx
 from bs4 import BeautifulSoup
 
-from solar.config import IST
+from solar.config import DEFAULT_COMPANIES, IST, Company
 
 log = logging.getLogger(__name__)
 TIMEOUT = 20
@@ -19,7 +19,6 @@ TIMEOUT = 20
 NEWS_QUERIES = [
     "India solar energy industry",
     "India solar module manufacturing",
-    "ReNew Energy OR Waaree OR Premier Energies OR Vikram Solar OR Emmvee",
     "India renewable energy stocks",
     "India solar PLI ALMM DCR",
 ]
@@ -48,7 +47,11 @@ def _published(entry) -> datetime | None:
     return datetime(*parsed[:6], tzinfo=timezone.utc).astimezone(IST)
 
 
-async def _fetch(query: str, category: str) -> list[dict]:
+async def _fetch(
+    query: str,
+    category: str,
+    topic_name: str = "",
+) -> list[dict]:
     url = _google_news_rss(query)
     try:
         async with httpx.AsyncClient(timeout=TIMEOUT, follow_redirects=True) as client:
@@ -68,6 +71,7 @@ async def _fetch(query: str, category: str) -> list[dict]:
                 "published": _published(e),
                 "category": category,
                 "query": query,
+                "topic_name": topic_name,
             })
         return rows
     except Exception as e:  # noqa: BLE001
@@ -75,16 +79,38 @@ async def _fetch(query: str, category: str) -> list[dict]:
         return []
 
 
-async def fetch_solar_news() -> dict:
+def _company_queries(companies: list[Company]) -> list[str]:
+    names = [
+        f'"{company.name}"'
+        for company in companies
+        if company.active
+    ]
+    return [
+        " OR ".join(names[index:index + 6])
+        for index in range(0, len(names), 6)
+        if names[index:index + 6]
+    ]
+
+
+async def fetch_solar_news(
+    companies: list[Company] | None = None,
+    supplementary_topics: list[dict] | None = None,
+) -> dict:
     """Fetch and strictly prioritize last-24-hour news.
 
     Older stories are retained only as current-event context and are visibly labelled.
     """
-    tasks = [_fetch(q, "industry") for q in NEWS_QUERIES]
+    source = companies if companies is not None else DEFAULT_COMPANIES
+    tasks = [_fetch(q, "industry") for q in NEWS_QUERIES + _company_queries(source)]
     tasks += [_fetch(q, "government") for q in GOVT_QUERIES]
+    for topic in supplementary_topics or []:
+        tasks.append(
+            _fetch(topic["query"], "supplementary", topic["name"])
+        )
     groups = await asyncio.gather(*tasks)
 
-    seen, industry, government = set(), [], []
+    core_seen, supplementary_seen = set(), set()
+    industry, government, supplementary = [], [], []
     now = datetime.now(IST)
     cutoff = now - timedelta(hours=24)
     fallback_cutoff = now - timedelta(days=7)
@@ -92,6 +118,11 @@ async def fetch_solar_news() -> dict:
     for rows in groups:
         for a in rows:
             key = a["url"] or a["title"].lower()
+            seen = (
+                supplementary_seen
+                if a["category"] == "supplementary"
+                else core_seen
+            )
             if not key or key in seen:
                 continue
             seen.add(key)
@@ -104,11 +135,22 @@ async def fetch_solar_news() -> dict:
                 a["hours_old"] = round((now - pub).total_seconds() / 3600, 1)
             else:
                 continue
-            (government if a["category"] == "government" else industry).append(a)
+            if a["category"] == "government":
+                government.append(a)
+            elif a["category"] == "supplementary":
+                supplementary.append(a)
+            else:
+                industry.append(a)
 
     def sort_key(a):
         return a["published"] or fallback_cutoff
 
     industry.sort(key=sort_key, reverse=True)
     government.sort(key=sort_key, reverse=True)
-    return {"industry": industry, "government": government, "cutoff": cutoff}
+    supplementary.sort(key=sort_key, reverse=True)
+    return {
+        "industry": industry,
+        "government": government,
+        "supplementary": supplementary,
+        "cutoff": cutoff,
+    }

@@ -11,11 +11,20 @@ from urllib.parse import urlencode
 from jinja2 import Environment, FileSystemLoader, Undefined
 from weasyprint import HTML
 
-from solar.config import COMPANIES, IST, settings
+from solar.config import IST, settings
 from solar.data.prices import fetch_prices
 from solar.data.ratios import fetch_and_store_ratios
-from solar.database import mark_articles_sent, ratio_history
-from solar.news.ai_analyst import analyze_articles
+from solar.database import (
+    active_supplementary_topics,
+    apply_listing_checks,
+    mark_articles_sent,
+    ratio_history,
+    tracked_companies,
+)
+from solar.news.ai_analyst import (
+    analyze_articles,
+    analyze_supplementary_articles,
+)
 from solar.news.fetcher import fetch_solar_news
 
 log = logging.getLogger(__name__)
@@ -87,17 +96,62 @@ def _best_worst(rows: list[dict], metric: str, higher_is_better=True) -> dict:
 
 async def collect_report_data() -> dict:
     now = datetime.now(IST)
+    companies = await tracked_companies()
+    supplementary_topics = await active_supplementary_topics()
     # yfinance is synchronous, run price work off the event loop while news downloads.
-    price_task = asyncio.to_thread(fetch_prices)
-    news_task = fetch_solar_news()
+    price_task = asyncio.to_thread(fetch_prices, companies)
+    news_task = fetch_solar_news(companies, supplementary_topics)
     prices, raw_news = await asyncio.gather(price_task, news_task)
-    ratios = await fetch_and_store_ratios()
+    ratios = await fetch_and_store_ratios(companies)
 
-    industry_task = analyze_articles(raw_news["industry"], "industry news", 7)
-    govt_task = analyze_articles(raw_news["government"], "government / regulatory notifications", 6)
-    industry, government = await asyncio.gather(industry_task, govt_task)
+    deactivated_tickers = await apply_listing_checks(prices["rows"])
+    if deactivated_tickers:
+        companies = [
+            company for company in companies
+            if company.ticker not in deactivated_tickers
+        ]
+        prices["rows"] = [
+            row for row in prices["rows"]
+            if row.get("ticker") not in deactivated_tickers
+        ]
+        ratios = [
+            row for row in ratios
+            if row.get("ticker") not in deactivated_tickers
+        ]
+
+    company_names = [company.name for company in companies]
+    industry_task = analyze_articles(
+        raw_news["industry"],
+        "industry news",
+        7,
+        company_names,
+    )
+    govt_task = analyze_articles(
+        raw_news["government"],
+        "government / regulatory notifications",
+        6,
+        company_names,
+    )
+    supplementary_task = analyze_supplementary_articles(
+        raw_news["supplementary"],
+        supplementary_topics,
+    )
+    industry, government, supplementary = await asyncio.gather(
+        industry_task,
+        govt_task,
+        supplementary_task,
+    )
+    core_urls = {
+        article["url"]
+        for article in industry["articles"] + government["articles"]
+    }
+    supplementary["articles"] = [
+        article for article in supplementary["articles"]
+        if article["url"] not in core_urls
+    ]
     await mark_articles_sent(industry["articles"], "industry")
     await mark_articles_sent(government["articles"], "government")
+    await mark_articles_sent(supplementary["articles"], "supplementary")
 
     histories = {}
     for row in ratios:
@@ -120,12 +174,13 @@ async def collect_report_data() -> dict:
         "report_date": now.strftime("%A, %d %B %Y"),
         "report_date_iso": report_date_iso,
         "generated_at": now.strftime("%d-%m-%Y %H:%M:%S IST"),
-        "companies": COMPANIES,
+        "companies": companies,
         "prices": prices,
         "ratios": ratios,
         "histories": histories,
         "industry": industry,
         "government": government,
+        "supplementary": supplementary,
         "insights": insights,
         "feedback_url": feedback_url,
     }

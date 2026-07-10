@@ -49,9 +49,12 @@ def fmt_money(value, currency="INR"):
 
 
 def pct_class(value):
-    if value is None:
+    if value is None or isinstance(value, Undefined):
         return "neutral"
-    return "positive" if value >= 0 else "negative"
+    try:
+        return "positive" if value >= 0 else "negative"
+    except TypeError:
+        return "neutral"
 
 
 def impact_class(value):

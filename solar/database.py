@@ -82,16 +82,27 @@ async def init_db() -> None:
               preset INTEGER NOT NULL DEFAULT 0,
               created_at TEXT NOT NULL, updated_at TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS solar_meta (
+              key TEXT PRIMARY KEY, value TEXT NOT NULL
+            );
             """
         )
-        for email in settings.default_recipients.split(","):
-            email = email.strip().lower()
-            if email:
-                await db.execute(
-                    """INSERT OR IGNORE INTO recipients
-                       (email,name,active,created_at) VALUES(?,?,1,?)""",
-                    (email, "", now_ist()),
-                )
+        seed = await db.execute(
+            "SELECT 1 FROM solar_meta WHERE key='default_recipients_seeded'"
+        )
+        if await seed.fetchone() is None:
+            for email in settings.default_recipients.split(","):
+                email = email.strip().lower()
+                if email:
+                    await db.execute(
+                        """INSERT OR IGNORE INTO recipients
+                           (email,name,active,created_at) VALUES(?,?,1,?)""",
+                        (email, "", now_ist()),
+                    )
+            await db.execute(
+                """INSERT INTO solar_meta (key,value)
+                   VALUES ('default_recipients_seeded','1')"""
+            )
         for company in DEFAULT_COMPANIES:
             await db.execute(
                 """INSERT INTO tracked_companies
@@ -161,18 +172,9 @@ async def active_recipients() -> list[dict]:
     db = await get_db()
     try:
         cur = await db.execute("SELECT email, name FROM recipients WHERE active=1")
-        rows = [dict(r) for r in await cur.fetchall()]
-        cur = await db.execute("SELECT COUNT(*) AS count FROM recipients")
-        has_saved_recipients = (await cur.fetchone())["count"] > 0
+        return [dict(r) for r in await cur.fetchall()]
     finally:
         await db.close()
-    if has_saved_recipients:
-        return rows
-    return [
-        {"email": email.strip(), "name": ""}
-        for email in settings.default_recipients.split(",")
-        if email.strip()
-    ]
 
 
 async def add_recipient(email: str, name: str = "") -> None:
@@ -192,6 +194,15 @@ async def set_recipient_active(email: str, active: bool) -> None:
     db = await get_db()
     try:
         await db.execute("UPDATE recipients SET active=? WHERE email=?", (int(active), email))
+        await db.commit()
+    finally:
+        await db.close()
+
+
+async def delete_recipient(email: str) -> None:
+    db = await get_db()
+    try:
+        await db.execute("DELETE FROM recipients WHERE email=?", (email,))
         await db.commit()
     finally:
         await db.close()

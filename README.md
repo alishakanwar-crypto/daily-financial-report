@@ -28,7 +28,8 @@ The solar report is scheduled daily at **10:00 AM IST**. Its admin dashboard is
 available at `/solar?token=<APP_SECRET>`, with manual generation, downloads,
 recipient management (including pause/resume controls) and AI-feedback review.
 The focused mailing-list dashboard is available at
-`/solar/mailing-list?token=<APP_SECRET>`. Adding a recipient immediately sends
+`/solar/mailing-list?token=<APP_SECRET>`. Recipients can be paused, resumed, or
+permanently removed. Adding a recipient immediately sends
 the latest available report, then includes them in the daily 10:00 AM IST run.
 Manage tracked companies at `/solar/companies?token=<APP_SECRET>` and
 supplementary news filters at `/solar/topics?token=<APP_SECRET>`.

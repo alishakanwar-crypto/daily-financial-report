@@ -19,6 +19,7 @@ from solar.database import (
     add_recipient,
     add_supplementary_topic,
     company_rows,
+    delete_recipient,
     delete_supplementary_topic,
     feedback_for_export,
     get_db,
@@ -337,6 +338,19 @@ async def toggle_recipient(
     _auth(tk)
     await set_recipient_active(email.strip().lower(), bool(active))
     return _back(tk, "Recipient updated", return_to)
+
+
+@router.post("/recipients/delete")
+async def remove_recipient(
+    request: Request,
+    email: str = Form(...),
+    token: str = Form(""),
+    return_to: str = Form("/solar"),
+):
+    tk = _token(request, token)
+    _auth(tk)
+    await delete_recipient(email.strip().lower())
+    return _back(tk, "Recipient permanently removed", return_to)
 
 
 async def _generate_and_email() -> None:

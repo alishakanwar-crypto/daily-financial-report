@@ -103,8 +103,8 @@ class Settings(BaseSettings):
         alias="SOLAR_DEFAULT_RECIPIENTS",
     )
 
-    report_hour_ist: int = Field(7, alias="SOLAR_REPORT_HOUR_IST")
-    report_minute_ist: int = Field(30, alias="SOLAR_REPORT_MINUTE_IST")
+    report_hour_ist: int = Field(10, alias="SOLAR_REPORT_HOUR_IST")
+    report_minute_ist: int = Field(0, alias="SOLAR_REPORT_MINUTE_IST")
 
     app_secret: str = Field("change-me-in-production", alias="APP_SECRET")
     base_url: str = Field("http://localhost:8000", alias="BASE_URL")

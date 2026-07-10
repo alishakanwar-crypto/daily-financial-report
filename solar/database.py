@@ -60,6 +60,14 @@ async def init_db() -> None:
             );
             """
         )
+        for email in settings.default_recipients.split(","):
+            email = email.strip().lower()
+            if email:
+                await db.execute(
+                    """INSERT OR IGNORE INTO recipients
+                       (email,name,active,created_at) VALUES(?,?,1,?)""",
+                    (email, "", now_ist()),
+                )
         await db.commit()
     finally:
         await db.close()
@@ -99,9 +107,11 @@ async def active_recipients() -> list[dict]:
     try:
         cur = await db.execute("SELECT email, name FROM recipients WHERE active=1")
         rows = [dict(r) for r in await cur.fetchall()]
+        cur = await db.execute("SELECT COUNT(*) AS count FROM recipients")
+        has_saved_recipients = (await cur.fetchone())["count"] > 0
     finally:
         await db.close()
-    if rows:
+    if has_saved_recipients:
         return rows
     return [
         {"email": email.strip(), "name": ""}

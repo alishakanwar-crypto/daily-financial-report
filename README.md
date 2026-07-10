@@ -19,9 +19,9 @@ Energies, Vikram Solar, and Emmvee Solar**.
   for subsequent AI curation
 - Admin-only JSONL export for optional reviewed OpenAI fine-tuning
 
-The solar report is scheduled daily at **07:30 IST**. Its admin dashboard is
+The solar report is scheduled daily at **10:00 AM IST**. Its admin dashboard is
 available at `/solar?token=<APP_SECRET>`, with manual generation, downloads,
-recipient management and AI-feedback review.
+recipient management (including pause/resume controls) and AI-feedback review.
 
 ## What You Get
 

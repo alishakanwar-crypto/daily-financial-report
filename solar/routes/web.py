@@ -58,6 +58,9 @@ async def solar_dashboard(request: Request):
     return templates.TemplateResponse("dashboard.html", {
         "request": request, "token": token, "recipients": recipients,
         "reports": reports, "feedback": feedback,
+        "schedule_time": (
+            f"{settings.report_hour_ist:02d}:{settings.report_minute_ist:02d} IST"
+        ),
         "status": request.query_params.get("status", ""),
     })
 

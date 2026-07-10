@@ -94,6 +94,7 @@ def _company_ratios(company: Company) -> dict:
         "ticker": company.ticker,
         "exchange": company.exchange,
         "currency": company.currency,
+        "financial_currency": info.get("financialCurrency") or company.currency,
         "statement_date": _statement_date(tk),
         "captured_at": datetime.now(IST).strftime("%d-%m-%Y %H:%M:%S IST"),
         # Fundamental / valuation
@@ -165,6 +166,17 @@ def _latest(series: dict[str, list[dict]], metric: str, offset: int = 0) -> Opti
     return _n(values[-1 - offset].get("reportedValue", {}).get("raw"))
 
 
+def _latest_currency(series: dict[str, list[dict]], metric: str) -> Optional[str]:
+    values = series.get(metric, [])
+    if not values:
+        return None
+    latest = values[-1]
+    return (
+        latest.get("currencyCode")
+        or latest.get("reportedValue", {}).get("currencyCode")
+    )
+
+
 def _company_ratios_fallback(company: Company) -> dict:
     now_ist = datetime.now(IST)
     response = httpx.get(
@@ -212,12 +224,18 @@ def _company_ratios_fallback(company: Company) -> dict:
     market_cap = _latest(series, "trailingMarketCap")
     enterprise_value = _latest(series, "trailingEnterpriseValue")
     dividend_yield = _latest(series, "trailingDividendYield")
+    financial_currency = (
+        _latest_currency(series, "annualTotalRevenue")
+        or _latest_currency(series, "annualTotalAssets")
+        or company.currency
+    )
 
     return {
         "name": company.name,
         "ticker": company.ticker,
         "exchange": company.exchange,
         "currency": company.currency,
+        "financial_currency": financial_currency,
         "statement_date": datetime.fromisoformat(max(statement_dates)).strftime("%d-%m-%Y"),
         "captured_at": now_ist.strftime("%d-%m-%Y %H:%M:%S IST"),
         "market_cap": market_cap,
@@ -281,6 +299,7 @@ async def fetch_and_store_ratios() -> list[dict]:
                     "ticker": company.ticker,
                     "exchange": company.exchange,
                     "currency": company.currency,
+                    "financial_currency": company.currency,
                     "statement_date": "N/A",
                     "error": str(fallback_error),
                 })

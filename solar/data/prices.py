@@ -109,6 +109,39 @@ def _chart_price(company: Company, now_ist: datetime) -> dict:
     }
 
 
+def _usd_inr_rate(now_ist: datetime) -> tuple[Optional[float], Optional[str]]:
+    start = int((now_ist - timedelta(days=10)).timestamp())
+    end = int((now_ist + timedelta(days=1)).timestamp())
+    last_error = None
+    for host in ("query1.finance.yahoo.com", "query2.finance.yahoo.com"):
+        try:
+            response = httpx.get(
+                f"https://{host}/v8/finance/chart/INR=X",
+                params={
+                    "period1": start,
+                    "period2": end,
+                    "interval": "1d",
+                },
+                headers={"User-Agent": "Mozilla/5.0"},
+                timeout=20,
+            )
+            response.raise_for_status()
+            result = response.json()["chart"]["result"][0]
+            closes = result["indicators"]["quote"][0].get("close", [])
+            records = []
+            for index, timestamp in enumerate(result.get("timestamp", [])):
+                date = datetime.fromtimestamp(timestamp, IST).date()
+                rate = _safe(closes[index]) if index < len(closes) else None
+                if date < now_ist.date() and rate is not None:
+                    records.append((date, rate))
+            if records:
+                date, rate = records[-1]
+                return rate, date.strftime("%d-%m-%Y")
+        except Exception as e:  # noqa: BLE001
+            last_error = e
+    raise ValueError(f"USD/INR chart returned no completed trading day: {last_error}")
+
+
 def fetch_prices() -> dict:
     """Return yesterday's OHLC + average for each listed company.
 
@@ -117,6 +150,12 @@ def fetch_prices() -> dict:
     now_ist = datetime.now(IST)
     rows = []
     trading_date_label = None
+    usd_inr_rate = None
+    usd_inr_date = None
+    try:
+        usd_inr_rate, usd_inr_date = _usd_inr_rate(now_ist)
+    except Exception as e:  # noqa: BLE001
+        log.error(f"USD/INR conversion fetch failed: {e}")
 
     for company in listed_companies():
         row = {
@@ -181,5 +220,7 @@ def fetch_prices() -> dict:
     return {
         "generated_at": now_ist.strftime("%d-%m-%Y %H:%M:%S IST"),
         "trading_date": trading_date_label or "N/A",
+        "usd_inr_rate": usd_inr_rate,
+        "usd_inr_date": usd_inr_date,
         "rows": rows,
     }

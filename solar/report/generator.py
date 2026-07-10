@@ -48,6 +48,21 @@ def fmt_money(value, currency="INR"):
     return f"{sign}{symbol}{value:,.0f}"
 
 
+def fmt_money_dual(value, currency="INR", usd_inr_rate=None):
+    primary = fmt_money(value, currency)
+    if (
+        primary == "N/A"
+        or currency != "USD"
+        or usd_inr_rate is None
+        or isinstance(usd_inr_rate, Undefined)
+    ):
+        return primary
+    try:
+        return f"{primary} / {fmt_money(value * usd_inr_rate, 'INR')}"
+    except (TypeError, ValueError):
+        return primary
+
+
 def pct_class(value):
     if value is None or isinstance(value, Undefined):
         return "neutral"
@@ -122,6 +137,7 @@ async def generate_pdf(output_path: str | None = None) -> tuple[str, dict]:
     env.filters.update({
         "num": fmt_number,
         "money": fmt_money,
+        "money_dual": fmt_money_dual,
         "pct_class": pct_class,
         "impact_class": impact_class,
     })

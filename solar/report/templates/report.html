@@ -29,6 +29,7 @@ td { border-bottom:1px solid #dce9e0; padding:5px 4px; text-align:right; vertica
 tr:nth-child(even) td { background:#f7fbf8; }
 .company { font-weight:800; color:#075f36; }
 .ticker { color:#7a9184; font-size:6.7px; }
+.converted { color:#08783f; font-size:6.5px; white-space:nowrap; margin-top:1px; }
 .positive { color:#08783f; font-weight:700; }.negative { color:#b52b2b; font-weight:700; }.mixed { color:#bd7400; font-weight:700; }.neutral { color:#60756a; }
 .metric-grid { display:flex; gap:7px; flex-wrap:wrap; margin:8px 0 12px; }
 .metric { width:31.8%; background:#f4faf6; border:1px solid #d6eadc; border-radius:7px; padding:8px; }
@@ -62,13 +63,16 @@ tr:nth-child(even) td { background:#f7fbf8; }
 <section>
   <div class="section-kicker">01 • Market Monitor</div>
   <h2 class="page-title">Previous Trading Day</h2>
-  <p class="subtitle">{{ prices.trading_date }} • Publicly listed companies only • RNW is quoted in USD; Indian listings in INR.</p>
+  <p class="subtitle">{{ prices.trading_date }} • Publicly listed companies only • RNW is quoted in USD with INR equivalents; Indian listings in INR.{% if prices.usd_inr_rate is not none %} Conversion: USD 1 = ₹{{ prices.usd_inr_rate|num }} ({{ prices.usd_inr_date }}).{% endif %}</p>
   <table>
     <thead><tr><th>Company</th><th>Open</th><th>Close</th><th>Average*</th><th>High</th><th>Low</th><th>Day change</th><th>Volume</th></tr></thead>
     <tbody>{% for p in prices.rows %}<tr>
       <td><div class="company">{{ p.name }}</div><div class="ticker">{{ p.exchange }}: {{ p.ticker }} • {{ p.trade_date }}</div></td>
-      <td>{{ p.symbol }}{{ p.open|num }}</td><td>{{ p.symbol }}{{ p.close|num }}</td><td>{{ p.symbol }}{{ p.average|num }}</td>
-      <td>{{ p.symbol }}{{ p.high|num }}</td><td>{{ p.symbol }}{{ p.low|num }}</td>
+      <td>{{ p.symbol }}{{ p.open|num }}{% if p.currency == 'USD' and p.open is not none and prices.usd_inr_rate is not none %}<div class="converted">₹{{ (p.open * prices.usd_inr_rate)|num }}</div>{% endif %}</td>
+      <td>{{ p.symbol }}{{ p.close|num }}{% if p.currency == 'USD' and p.close is not none and prices.usd_inr_rate is not none %}<div class="converted">₹{{ (p.close * prices.usd_inr_rate)|num }}</div>{% endif %}</td>
+      <td>{{ p.symbol }}{{ p.average|num }}{% if p.currency == 'USD' and p.average is not none and prices.usd_inr_rate is not none %}<div class="converted">₹{{ (p.average * prices.usd_inr_rate)|num }}</div>{% endif %}</td>
+      <td>{{ p.symbol }}{{ p.high|num }}{% if p.currency == 'USD' and p.high is not none and prices.usd_inr_rate is not none %}<div class="converted">₹{{ (p.high * prices.usd_inr_rate)|num }}</div>{% endif %}</td>
+      <td>{{ p.symbol }}{{ p.low|num }}{% if p.currency == 'USD' and p.low is not none and prices.usd_inr_rate is not none %}<div class="converted">₹{{ (p.low * prices.usd_inr_rate)|num }}</div>{% endif %}</td>
       <td class="{{ p.change_pct|pct_class }}">{% if p.change_pct is not none %}{{ "%+.2f"|format(p.change_pct) }}%{% else %}N/A{% endif %}</td>
       <td>{{ "{:,.0f}".format(p.volume) if p.volume is not none else "N/A" }}</td>
     </tr>{% endfor %}</tbody>
@@ -111,8 +115,8 @@ tr:nth-child(even) td { background:#f7fbf8; }
   <h3 style="color:#075f36">Cash Flow Quality</h3>
   <table>
     <thead><tr><th>Company</th><th>Operating cash flow</th><th>Free cash flow</th><th>OCF margin</th><th>FCF margin</th><th>Cash conversion (OCF/NI)</th><th>Capex / Revenue</th><th>Total debt</th><th>Cash</th></tr></thead>
-    <tbody>{% for r in ratios if not r.unlisted %}<tr><td class="company">{{ r.name }}<div class="ticker">{{ r.currency }} • {{ r.statement_date }}</div></td>
-      <td>{{ r.operating_cf|money(r.currency) }}</td><td>{{ r.free_cf|money(r.currency) }}</td><td>{{ r.operating_cf_margin|num }}%</td><td>{{ r.fcf_margin|num }}%</td><td>{{ r.cash_conversion|num }}x</td><td>{{ r.capex_to_revenue|num }}%</td><td>{{ r.total_debt|money(r.currency) }}</td><td>{{ r.cash|money(r.currency) }}</td></tr>{% endfor %}</tbody>
+    <tbody>{% for r in ratios if not r.unlisted %}<tr><td class="company">{{ r.name }}<div class="ticker">{{ r.financial_currency }} • {{ r.statement_date }}</div></td>
+      <td>{{ r.operating_cf|money_dual(r.financial_currency, prices.usd_inr_rate) }}</td><td>{{ r.free_cf|money_dual(r.financial_currency, prices.usd_inr_rate) }}</td><td>{{ r.operating_cf_margin|num }}%</td><td>{{ r.fcf_margin|num }}%</td><td>{{ r.cash_conversion|num }}x</td><td>{{ r.capex_to_revenue|num }}%</td><td>{{ r.total_debt|money_dual(r.financial_currency, prices.usd_inr_rate) }}</td><td>{{ r.cash|money_dual(r.financial_currency, prices.usd_inr_rate) }}</td></tr>{% endfor %}</tbody>
   </table>
   <div class="note"><strong>Automatic updates:</strong> ratios are recalculated on every report run. A dated SQLite snapshot is added whenever a company publishes a statement with a new period end; existing period snapshots are refreshed for feed corrections.</div>
 </section>

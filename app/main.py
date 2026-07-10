@@ -16,6 +16,9 @@ from fastapi.staticfiles import StaticFiles
 from app.config import settings, IST
 from app.database import init_db, log_report
 from app.routes.dashboard import router as dashboard_router
+from solar.config import settings as solar_settings
+from solar.database import init_db as init_solar_db
+from solar.routes.web import router as solar_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -44,10 +47,39 @@ async def scheduled_report_job():
         log.error(f"Scheduled report failed: {e}", exc_info=True)
 
 
+async def scheduled_solar_report_job():
+    """Generate and email the Indian Solar Industry Intelligence report."""
+    from solar.report.generator import generate_pdf
+    from solar.report.email_sender import send_report
+    from solar.database import log_report as log_solar_report
+
+    now_ist = datetime.now(IST)
+    date_str = now_ist.strftime("%Y-%m-%d")
+    log.info(
+        "=== Solar report generation started (%s) ===",
+        now_ist.strftime("%d-%m-%Y %H:%M:%S IST"),
+    )
+    try:
+        pdf_path, report_data = await generate_pdf()
+        result = await send_report(pdf_path, report_data)
+        status = "sent" if result["sent"] else "generated"
+        await log_solar_report(
+            date_str,
+            status,
+            pdf_path,
+            "; ".join(result["errors"]),
+        )
+        log.info("Solar report complete: %s", result)
+    except Exception as e:
+        await log_solar_report(date_str, "failed", error=str(e))
+        log.error("Scheduled solar report failed: %s", e, exc_info=True)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup / shutdown lifecycle."""
     await init_db()
+    await init_solar_db()
     log.info("Database initialized")
 
     # Schedule the daily report in IST
@@ -57,9 +89,26 @@ async def lifespan(app: FastAPI):
         timezone="Asia/Kolkata",
     )
     scheduler.add_job(scheduled_report_job, trigger, id="daily_report", replace_existing=True)
+
+    solar_trigger = CronTrigger(
+        hour=solar_settings.report_hour_ist,
+        minute=solar_settings.report_minute_ist,
+        timezone="Asia/Kolkata",
+    )
+    scheduler.add_job(
+        scheduled_solar_report_job,
+        solar_trigger,
+        id="solar_daily_report",
+        replace_existing=True,
+    )
     scheduler.start()
     log.info(
         f"Scheduler started — report at {settings.report_hour_ist:02d}:{settings.report_minute_ist:02d} IST daily"
+    )
+    log.info(
+        "Solar report scheduled at %02d:%02d IST daily",
+        solar_settings.report_hour_ist,
+        solar_settings.report_minute_ist,
     )
 
     yield
@@ -82,6 +131,7 @@ if os.path.isdir(static_dir):
 
 # Routes
 app.include_router(dashboard_router)
+app.include_router(solar_router)
 
 
 @app.get("/health")

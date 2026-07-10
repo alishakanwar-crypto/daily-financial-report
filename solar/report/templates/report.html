@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Indian Solar Industry Intelligence — {{ report_date }}</title>
+<style>
+@page { size: A4; margin: 15mm 13mm 16mm; @bottom-center { content: "Solar Industry Intelligence  •  " counter(page) " / " counter(pages); color: #61806c; font-size: 8px; } }
+* { box-sizing: border-box; }
+body { margin: 0; color: #173326; font-family: "DejaVu Sans", Arial, sans-serif; font-size: 9px; line-height: 1.42; background: #fff; }
+a { color: #08783f; text-decoration: none; }
+.cover { height: 255mm; margin: -15mm -13mm -16mm; padding: 29mm 21mm; color: white; background: linear-gradient(145deg,#062f20 0%,#08783f 52%,#69bd45 100%); position: relative; page-break-after: always; }
+.cover:after { content:""; position:absolute; width:180mm; height:180mm; border:1px solid rgba(255,255,255,.13); border-radius:50%; right:-70mm; bottom:-45mm; box-shadow:0 0 0 25mm rgba(255,255,255,.035),0 0 0 55mm rgba(255,255,255,.025); }
+.eyebrow { font-size: 10px; letter-spacing: 2.3px; text-transform: uppercase; opacity: .78; font-weight: 700; }
+.cover h1 { font-size: 40px; line-height: 1.06; margin: 16mm 0 7mm; letter-spacing: -1.2px; max-width: 150mm; }
+.cover h1 span { color: #c7f487; }
+.cover .lead { font-size: 15px; line-height: 1.55; max-width: 145mm; color: #e5f5e9; }
+.cover .date { position:absolute; bottom:35mm; left:21mm; font-size:18px; font-weight:700; }
+.cover .companies { position:absolute; bottom:19mm; left:21mm; right:21mm; font-size:9px; opacity:.8; border-top:1px solid rgba(255,255,255,.35); padding-top:6mm; }
+.page-title { border-bottom: 2.5px solid #13a05a; padding-bottom: 4px; margin: 0 0 10px; font-size: 20px; color: #074d2b; }
+.section-kicker { color:#168048; font-size:8px; text-transform:uppercase; letter-spacing:1.2px; font-weight:800; margin-bottom:2px; }
+.subtitle { color:#638071; font-size:9px; margin:-6px 0 12px; }
+.card { background:#f4faf6; border:1px solid #d9ede0; border-radius:7px; padding:9px; margin-bottom:9px; break-inside:avoid; }
+.note { background:#ecf8ef; border-left:4px solid #35a65c; padding:8px 10px; margin:8px 0; color:#345c46; }
+.warning { background:#fff9e8; border-left-color:#e4a817; }
+table { width:100%; border-collapse:collapse; margin:6px 0 12px; font-size:7.5px; }
+th { background:#075f36; color:white; padding:6px 4px; text-align:right; line-height:1.2; }
+th:first-child, td:first-child { text-align:left; }
+td { border-bottom:1px solid #dce9e0; padding:5px 4px; text-align:right; vertical-align:top; }
+tr:nth-child(even) td { background:#f7fbf8; }
+.company { font-weight:800; color:#075f36; }
+.ticker { color:#7a9184; font-size:6.7px; }
+.positive { color:#08783f; font-weight:700; }.negative { color:#b52b2b; font-weight:700; }.mixed { color:#bd7400; font-weight:700; }.neutral { color:#60756a; }
+.metric-grid { display:flex; gap:7px; flex-wrap:wrap; margin:8px 0 12px; }
+.metric { width:31.8%; background:#f4faf6; border:1px solid #d6eadc; border-radius:7px; padding:8px; }
+.metric .label { color:#587567; text-transform:uppercase; letter-spacing:.5px; font-size:6.5px; }
+.metric .value { font-size:13px; font-weight:800; color:#08783f; margin-top:2px; }
+.metric .detail { font-size:6.8px; color:#698275; }
+.news { border-bottom:1px solid #dce9e0; padding:7px 0; break-inside:avoid; }
+.news-title { font-size:9.5px; font-weight:800; line-height:1.3; }
+.news-meta { color:#6e8579; font-size:6.8px; margin:2px 0 4px; }
+.badge { display:inline-block; border-radius:8px; padding:1px 5px; font-size:6.3px; font-weight:800; background:#e4f5e9; color:#08783f; }
+.badge.context { background:#fff2d4; color:#936000; }
+.impact { border-radius:8px; padding:1px 5px; font-size:6.3px; border:1px solid currentColor; text-transform:uppercase; font-weight:800; }
+.why { color:#294d3b; margin-top:3px; }.takeaway { color:#527062; font-style:italic; }
+.summary { background:linear-gradient(100deg,#e6f6eb,#f7fbf8); border-radius:7px; padding:10px; margin-bottom:10px; color:#254c38; }
+.watch { padding-left:14px; margin:5px 0; }.watch li { margin:3px 0; }
+.feedback { margin-top:12px; background:#075f36; color:white; border-radius:8px; padding:12px; text-align:center; }
+.feedback a { color:white; font-weight:800; border:1px solid rgba(255,255,255,.7); border-radius:14px; padding:4px 12px; display:inline-block; margin-top:6px; }
+.small { font-size:6.7px; color:#73897e; }.page-break { page-break-before:always; }
+.disclaimer { font-size:6.5px; color:#789084; border-top:1px solid #dce9e0; padding-top:6px; margin-top:12px; }
+</style>
+</head>
+<body>
+<section class="cover">
+  <div class="eyebrow">Competitive Intelligence • India</div>
+  <h1>Solar Industry<br><span>Intelligence Report</span></h1>
+  <div class="lead">Market prices, financial strength, cash-flow quality, policy developments and AI-curated competitive news — built for an Indian solar industry operator.</div>
+  <div class="date">{{ report_date }}</div>
+  <div class="companies">TRACKING &nbsp; ReNew Energy Global &nbsp;•&nbsp; Waaree Energies &nbsp;•&nbsp; Premier Energies &nbsp;•&nbsp; Vikram Solar &nbsp;•&nbsp; Emmvee Solar</div>
+</section>
+
+<section>
+  <div class="section-kicker">01 • Market Monitor</div>
+  <h2 class="page-title">Previous Trading Day</h2>
+  <p class="subtitle">{{ prices.trading_date }} • Publicly listed companies only • RNW is quoted in USD; Indian listings in INR.</p>
+  <table>
+    <thead><tr><th>Company</th><th>Open</th><th>Close</th><th>Average*</th><th>High</th><th>Low</th><th>Day change</th><th>Volume</th></tr></thead>
+    <tbody>{% for p in prices.rows %}<tr>
+      <td><div class="company">{{ p.name }}</div><div class="ticker">{{ p.exchange }}: {{ p.ticker }} • {{ p.trade_date }}</div></td>
+      <td>{{ p.symbol }}{{ p.open|num }}</td><td>{{ p.symbol }}{{ p.close|num }}</td><td>{{ p.symbol }}{{ p.average|num }}</td>
+      <td>{{ p.symbol }}{{ p.high|num }}</td><td>{{ p.symbol }}{{ p.low|num }}</td>
+      <td class="{{ p.change_pct|pct_class }}">{% if p.change_pct is not none %}{{ "%+.2f"|format(p.change_pct) }}%{% else %}N/A{% endif %}</td>
+      <td>{{ "{:,.0f}".format(p.volume) if p.volume is not none else "N/A" }}</td>
+    </tr>{% endfor %}</tbody>
+  </table>
+  <div class="note"><strong>*Average price methodology:</strong> intraday volume-weighted average (VWAP) where Yahoo Finance provides 5-minute data; otherwise daily typical price (High + Low + Close) ÷ 3. The method is recorded for every company.</div>
+  <div class="note warning"><strong>Emmvee Solar:</strong> private/unlisted at report time; therefore no exchange-traded price is shown. It remains fully tracked for competitive and news intelligence.</div>
+
+  <div class="section-kicker" style="margin-top:15px">Quick comparison</div>
+  <div class="metric-grid">
+    {% set labels = {'roe':'Highest ROE','net_margin':'Highest net margin','revenue_growth':'Fastest revenue growth','debt_to_equity':'Lowest debt/equity','current_ratio':'Strongest current ratio','pe':'Lowest P/E'} %}
+    {% for key, insight in insights.items() %}{% if insight %}<div class="metric">
+      <div class="label">{{ labels[key] }}</div><div class="value">{{ insight.best }}</div>
+      <div class="detail">{{ insight.best_value|num }}{% if key in ['roe','net_margin','revenue_growth'] %}%{% endif %}</div>
+    </div>{% endif %}{% endfor %}
+  </div>
+</section>
+
+<section class="page-break">
+  <div class="section-kicker">02 • Comparative Fundamentals</div>
+  <h2 class="page-title">Valuation & Profitability</h2>
+  <p class="subtitle">Each row identifies the date of the latest underlying annual statement. Market ratios are point-in-time values captured {{ generated_at }}.</p>
+  <table>
+    <thead><tr><th>Company / Statement</th><th>P/E</th><th>Fwd P/E</th><th>P/B</th><th>P/S</th><th>EV/EBITDA</th><th>ROE</th><th>ROA</th><th>Net margin</th><th>EBITDA margin</th></tr></thead>
+    <tbody>{% for r in ratios %}<tr>
+      <td><div class="company">{{ r.name }}</div><div class="ticker">{{ r.exchange }}{% if r.ticker %}: {{ r.ticker }}{% endif %}<br>Statement: {{ r.statement_date }}</div></td>
+      {% if r.unlisted %}<td colspan="9" style="text-align:left">Private/unlisted — ratios not publicly available in standard market feeds.</td>{% else %}
+      <td>{{ r.pe|num }}</td><td>{{ r.forward_pe|num }}</td><td>{{ r.price_to_book|num }}</td><td>{{ r.price_to_sales|num }}</td><td>{{ r.ev_to_ebitda|num }}</td>
+      <td>{{ r.roe|num }}%</td><td>{{ r.roa|num }}%</td><td>{{ r.net_margin|num }}%</td><td>{{ r.ebitda_margin|num }}%</td>{% endif %}
+    </tr>{% endfor %}</tbody>
+  </table>
+
+  <h3 style="color:#075f36">Liquidity, Leverage & Efficiency</h3>
+  <table>
+    <thead><tr><th>Company</th><th>Current</th><th>Quick</th><th>Debt / Equity</th><th>Debt / Assets</th><th>Interest cover</th><th>Asset turnover</th><th>Revenue growth</th><th>Profit growth</th></tr></thead>
+    <tbody>{% for r in ratios if not r.unlisted %}<tr><td class="company">{{ r.name }}<div class="ticker">{{ r.statement_date }}</div></td>
+      <td>{{ r.current_ratio|num }}</td><td>{{ r.quick_ratio|num }}</td><td>{{ r.debt_to_equity|num }}</td><td>{{ r.debt_to_assets|num }}</td><td>{{ r.interest_coverage|num }}x</td><td>{{ r.asset_turnover|num }}x</td>
+      <td class="{{ r.revenue_growth|pct_class }}">{{ r.revenue_growth|num }}%</td><td class="{{ r.profit_growth|pct_class }}">{{ r.profit_growth|num }}%</td></tr>{% endfor %}</tbody>
+  </table>
+
+  <h3 style="color:#075f36">Cash Flow Quality</h3>
+  <table>
+    <thead><tr><th>Company</th><th>Operating cash flow</th><th>Free cash flow</th><th>OCF margin</th><th>FCF margin</th><th>Cash conversion (OCF/NI)</th><th>Capex / Revenue</th><th>Total debt</th><th>Cash</th></tr></thead>
+    <tbody>{% for r in ratios if not r.unlisted %}<tr><td class="company">{{ r.name }}<div class="ticker">{{ r.currency }} • {{ r.statement_date }}</div></td>
+      <td>{{ r.operating_cf|money(r.currency) }}</td><td>{{ r.free_cf|money(r.currency) }}</td><td>{{ r.operating_cf_margin|num }}%</td><td>{{ r.fcf_margin|num }}%</td><td>{{ r.cash_conversion|num }}x</td><td>{{ r.capex_to_revenue|num }}%</td><td>{{ r.total_debt|money(r.currency) }}</td><td>{{ r.cash|money(r.currency) }}</td></tr>{% endfor %}</tbody>
+  </table>
+  <div class="note"><strong>Automatic updates:</strong> ratios are recalculated on every report run. A dated SQLite snapshot is added whenever a company publishes a statement with a new period end; existing period snapshots are refreshed for feed corrections.</div>
+</section>
+
+<section class="page-break">
+  <div class="section-kicker">03 • AI-Curated Industry Intelligence</div>
+  <h2 class="page-title">Indian Solar & Alternative Energy News</h2>
+  <div class="summary"><strong>AI Executive View:</strong> {{ industry.executive_summary }}</div>
+  {% if industry.watch_items %}<div class="card"><strong>What to watch next</strong><ul class="watch">{% for w in industry.watch_items %}<li>{{ w }}</li>{% endfor %}</ul></div>{% endif %}
+  {% for a in industry.articles %}<article class="news">
+    <div><span class="badge {% if a.recency != 'Last 24 hours' %}context{% endif %}">{{ a.recency }}</span> <span class="impact {{ a.impact|impact_class }}">{{ a.impact }}</span> <span class="badge">Impact {{ a.impact_score }}/100</span></div>
+    <div class="news-title"><a href="{{ a.url }}">{{ a.title }}</a></div>
+    <div class="news-meta">{{ a.source }} • {{ a.published.strftime('%d-%m-%Y %H:%M IST') if a.published else 'Publication time unavailable' }}{% if a.companies_affected %} • Affects: {{ a.companies_affected|join(', ') }}{% endif %}</div>
+    <div class="why"><strong>Why it matters:</strong> {{ a.one_line_why }}</div><div class="takeaway"><strong>Industry takeaway:</strong> {{ a.investor_takeaway }}</div>
+  </article>{% else %}<div class="note">No qualifying new industry stories found in the last 24 hours or current-event window.</div>{% endfor %}
+</section>
+
+<section class="page-break">
+  <div class="section-kicker">04 • Policy & Regulatory Radar</div>
+  <h2 class="page-title">Indian Government Notifications</h2>
+  <p class="subtitle">MNRE, PIB, Ministry of Power, CEA, SEBI and policy-related coverage — ranked for likely commercial or stock-market impact.</p>
+  <div class="summary"><strong>AI Policy View:</strong> {{ government.executive_summary }}</div>
+  {% if government.watch_items %}<div class="card"><strong>Regulatory watchlist</strong><ul class="watch">{% for w in government.watch_items %}<li>{{ w }}</li>{% endfor %}</ul></div>{% endif %}
+  {% for a in government.articles %}<article class="news">
+    <div><span class="badge {% if a.recency != 'Last 24 hours' %}context{% endif %}">{{ a.recency }}</span> <span class="impact {{ a.impact|impact_class }}">{{ a.impact }}</span> <span class="badge">Impact {{ a.impact_score }}/100</span></div>
+    <div class="news-title"><a href="{{ a.url }}">{{ a.title }}</a></div>
+    <div class="news-meta">{{ a.source }} • {{ a.published.strftime('%d-%m-%Y %H:%M IST') if a.published else 'Publication time unavailable' }}{% if a.companies_affected %} • Affects: {{ a.companies_affected|join(', ') }}{% endif %}</div>
+    <div class="why"><strong>Why it matters:</strong> {{ a.one_line_why }}</div><div class="takeaway"><strong>Investor / operator takeaway:</strong> {{ a.investor_takeaway }}</div>
+  </article>{% else %}<div class="note">No qualifying new government or policy item found in the monitored window.</div>{% endfor %}
+
+  <div class="feedback">
+    <strong>Help this report learn what matters to your business.</strong><br>
+    Rate relevance, flag weak stories, and request metrics. Your feedback becomes preference memory for the next AI-curated report.<br>
+    <a href="{{ feedback_url }}">Give feedback on this report</a>
+  </div>
+  <p class="disclaimer">Data sources include Yahoo Finance, public company financial statements, Google News-indexed publishers and Indian government domains. Links remain clickable in the PDF. AI commentary may contain errors and should be checked against linked primary sources. This is competitive intelligence, not investment advice. Generated {{ generated_at }}.</p>
+</section>
+</body>
+</html>

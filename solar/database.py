@@ -28,6 +28,64 @@ async def get_db() -> aiosqlite.Connection:
     return db
 
 
+async def _migrate_emmvee_listing(db: aiosqlite.Connection) -> None:
+    marker = "emmvee_public_listing_2025"
+    cur = await db.execute("SELECT 1 FROM solar_meta WHERE key=?", (marker,))
+    if await cur.fetchone() is not None:
+        return
+
+    emmvee = next(company for company in DEFAULT_COMPANIES if company.ticker == "EMMVEE.NS")
+    cur = await db.execute(
+        "SELECT id FROM tracked_companies WHERE ticker=?",
+        (emmvee.ticker,),
+    )
+    public_row = await cur.fetchone()
+    timestamp = now_ist()
+    if public_row:
+        await db.execute(
+            """UPDATE tracked_companies
+               SET name=?, currency=?, exchange=?, listed=1, website=?, note=?,
+                   active=1, listing_status='pending', consecutive_failures=0,
+                   updated_at=?
+               WHERE id=?""",
+            (
+                emmvee.name,
+                emmvee.currency,
+                emmvee.exchange,
+                emmvee.website,
+                emmvee.note,
+                timestamp,
+                public_row["id"],
+            ),
+        )
+        await db.execute(
+            """DELETE FROM tracked_companies
+               WHERE id<>? AND name=? AND ticker IS NULL""",
+            (public_row["id"], emmvee.name),
+        )
+    else:
+        await db.execute(
+            """UPDATE tracked_companies
+               SET ticker=?, currency=?, exchange=?, listed=1, website=?, note=?,
+                   active=1, listing_status='pending', consecutive_failures=0,
+                   updated_at=?
+               WHERE name=? AND (ticker IS NULL OR ticker='EMMVEE')""",
+            (
+                emmvee.ticker,
+                emmvee.currency,
+                emmvee.exchange,
+                emmvee.website,
+                emmvee.note,
+                timestamp,
+                emmvee.name,
+            ),
+        )
+    await db.execute(
+        "INSERT INTO solar_meta (key,value) VALUES (?,?)",
+        (marker, "1"),
+    )
+
+
 async def init_db() -> None:
     db = await get_db()
     try:
@@ -103,6 +161,7 @@ async def init_db() -> None:
                 """INSERT INTO solar_meta (key,value)
                    VALUES ('default_recipients_seeded','1')"""
             )
+        await _migrate_emmvee_listing(db)
         for company in DEFAULT_COMPANIES:
             await db.execute(
                 """INSERT INTO tracked_companies

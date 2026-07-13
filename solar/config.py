@@ -80,12 +80,12 @@ DEFAULT_COMPANIES: List[Company] = [
     ),
     Company(
         "Emmvee Solar",
-        None,
+        "EMMVEE.NS",
         "INR",
-        "Unlisted",
-        listed=False,
-        website="https://www.emmvee.com",
-        note="Private/unlisted (IPO filed) — price & market ratios unavailable; tracked via news.",
+        "NSE",
+        listed=True,
+        website="https://www.emmveepv.com",
+        note="Emmvee Photovoltaic Power; NSE: EMMVEE, BSE: 544608, listed November 2025.",
     ),
 ]
 COMPANIES = DEFAULT_COMPANIES

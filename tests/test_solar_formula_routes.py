@@ -86,6 +86,21 @@ class FormulaRouteTests(unittest.TestCase):
             "statement_date": "31-03-2026",
             "data_source_url": "https://example.com/official-filing.pdf",
             "cross_check_status": "Verified against official filing",
+            "source_published_date": "15-05-2026",
+            "source_link_status": "valid",
+            "source_link_checked_at": "10-07-2026 12:00:00 IST",
+            "raw_values": {"revenue": 100.0},
+            "normalized_values": {"revenue": 1_000_000_000.0},
+            "formula_audit": {
+                "roe": {
+                    "formula": "(net_income / total_equity) * 100",
+                    "formula_inputs": {
+                        "net_income": 100.0,
+                        "total_equity": 500.0,
+                    },
+                    "result": 20.0,
+                }
+            },
         }
         asyncio.run(save_ratio_snapshot(row))
 
@@ -108,6 +123,12 @@ class FormulaRouteTests(unittest.TestCase):
         self.assertEqual(
             saved["cross_check_status"],
             "Verified against official filing",
+        )
+        self.assertEqual(saved["source_published_date"], "15-05-2026")
+        self.assertEqual(saved["source_link_status"], "valid")
+        self.assertEqual(
+            saved["formula_audit"]["roe"]["result"],
+            20.0,
         )
 
 

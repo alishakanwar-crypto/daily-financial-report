@@ -95,10 +95,10 @@ def _best_worst(rows: list[dict], metric: str, higher_is_better=True) -> dict:
     return {
         "best": ordered[0]["name"],
         "best_value": ordered[0][metric],
-        "best_source_url": ordered[0].get("market_source_url"),
+        "best_source_url": ordered[0].get("official_source_url"),
         "worst": ordered[-1]["name"],
         "worst_value": ordered[-1][metric],
-        "worst_source_url": ordered[-1].get("market_source_url"),
+        "worst_source_url": ordered[-1].get("official_source_url"),
     }
 
 
@@ -176,7 +176,6 @@ async def collect_report_data() -> dict:
         "revenue_growth": _best_worst(listed_ratios, "revenue_growth"),
         "debt_to_equity": _best_worst(listed_ratios, "debt_to_equity", higher_is_better=False),
         "current_ratio": _best_worst(listed_ratios, "current_ratio"),
-        "pe": _best_worst(listed_ratios, "pe", higher_is_better=False),
     }
 
     return {
@@ -198,15 +197,8 @@ async def collect_report_data() -> dict:
 
 async def generate_pdf(output_path: str | None = None) -> tuple[str, dict]:
     data = await collect_report_data()
-    env = Environment(loader=FileSystemLoader(TEMPLATE_DIR), autoescape=True)
-    env.filters.update({
-        "num": fmt_number,
-        "money": fmt_money,
-        "money_dual": fmt_money_dual,
-        "pct_class": pct_class,
-        "impact_class": impact_class,
-    })
-    html = env.get_template("report.html").render(**data)
+
+    html = render_report_html(data)
 
     report_dir = "data/solar_reports"
     os.makedirs(report_dir, exist_ok=True)
@@ -215,3 +207,16 @@ async def generate_pdf(output_path: str | None = None) -> tuple[str, dict]:
     HTML(string=html, base_url=os.getcwd()).write_pdf(output_path)
     log.info(f"Solar Industry Report generated: {output_path}")
     return output_path, data
+
+
+def render_report_html(data: dict) -> str:
+    """Render report HTML separately so source and formula links are testable."""
+    env = Environment(loader=FileSystemLoader(TEMPLATE_DIR), autoescape=True)
+    env.filters.update({
+        "num": fmt_number,
+        "money": fmt_money,
+        "money_dual": fmt_money_dual,
+        "pct_class": pct_class,
+        "impact_class": impact_class,
+    })
+    return env.get_template("report.html").render(**data)

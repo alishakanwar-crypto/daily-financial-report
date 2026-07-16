@@ -1,20 +1,14 @@
-"""Comparative financial, fundamental, cash-flow, and operating ratios."""
+"""Filing-only comparative financial and cash-flow ratios."""
 
 from __future__ import annotations
 
 import logging
 import math
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional
 
-import httpx
-
 from solar.config import DEFAULT_COMPANIES, Company, IST, listed_companies
-from solar.data.financial_sources import (
-    cash_flow_source,
-    official_statement,
-    validate_source_url,
-)
+from solar.data.financial_sources import official_statement, validate_source_url
 from solar.database import save_ratio_snapshot
 from solar.formulas import (
     DEFAULT_FORMULAS,
@@ -26,25 +20,31 @@ from solar.formulas import (
 log = logging.getLogger(__name__)
 
 
-def _n(v) -> Optional[float]:
+def _n(value) -> Optional[float]:
     try:
-        f = float(v)
-        return None if math.isnan(f) or math.isinf(f) else f
+        number = float(value)
+        return None if math.isnan(number) or math.isinf(number) else number
     except (TypeError, ValueError):
         return None
 
 
-def _ratio(a, b, percent=False) -> Optional[float]:
-    if a is None or b in (None, 0):
+def _ratio(numerator, denominator, percent=False) -> Optional[float]:
+    if numerator is None or denominator in (None, 0):
         return None
-    value = a / b * (100 if percent else 1)
+    value = numerator / denominator * (100 if percent else 1)
     return round(value, 2)
 
 
-def _growth(cur, prev) -> Optional[float]:
-    if cur is None or prev in (None, 0):
+def _growth(current, previous) -> Optional[float]:
+    if current is None or previous in (None, 0):
         return None
-    return round((cur - prev) / abs(prev) * 100, 2)
+    return round((current - previous) / abs(previous) * 100, 2)
+
+
+def _average(current, previous) -> Optional[float]:
+    if current is None or previous is None:
+        return None
+    return (current + previous) / 2
 
 
 def _formula_expressions(formulas: Optional[dict[str, str]]) -> dict[str, str]:
@@ -56,124 +56,160 @@ def _formula_expressions(formulas: Optional[dict[str, str]]) -> dict[str, str]:
     }
 
 
-def _cash_flow_explanation(
-    operating_cf: Optional[float],
-    capex: Optional[float],
-    free_cf: Optional[float],
-    fcff: Optional[float],
-    after_tax_interest: Optional[float],
-) -> str:
-    if operating_cf is None or capex is None:
-        return "Cash-flow result is unavailable because operating cash flow or capex is missing."
-    if free_cf is not None and free_cf < 0 and operating_cf >= 0 and capex > operating_cf:
-        fcf_reason = (
-            "FCF is negative because normalized capex exceeds operating cash flow."
-        )
-    elif free_cf is not None:
-        fcf_reason = "FCF follows the saved formula using normalized positive capex."
-    else:
-        fcf_reason = "FCF could not be calculated with the saved formula."
-    if fcff is None:
-        return f"{fcf_reason} FCFF is unavailable because a required input is missing."
-    if fcff < 0 and after_tax_interest is not None:
-        return (
-            f"{fcf_reason} FCFF remains negative because capex exceeds operating "
-            "cash flow plus after-tax financing expense."
-        )
-    if fcff >= 0:
-        return (
-            f"{fcf_reason} FCFF is positive after adding back the after-tax "
-            "financing expense."
-        )
-    return fcf_reason
+def _calculate_tax_rate(
+    pretax_income: Optional[float],
+    tax_provision: Optional[float],
+) -> Optional[float]:
+    if pretax_income in (None, 0) or tax_provision is None:
+        return None
+    rate = tax_provision / pretax_income
+    return rate if 0 <= rate <= 1 else None
 
 
 def _cash_flow_analysis(
-    company: Company,
-    market_statement_date: str,
-    operating_cf: Optional[float],
-    raw_capex: Optional[float],
-    raw_interest: Optional[float],
-    pretax_income: Optional[float],
-    tax_provision: Optional[float],
-    ebit: Optional[float],
-    da: Optional[float],
-    change_nwc: Optional[float],
-    revenue: Optional[float],
-    formulas: Optional[dict[str, str]],
-    raw_reported_free_cf: Optional[float] = None,
+    statement: dict,
+    formulas: Optional[dict[str, str]] = None,
 ) -> dict:
+    values = statement["values"]
     expressions = _formula_expressions(formulas)
-    normalized_market_inputs = {
-        "operating_cf": operating_cf,
-        "capex": abs(raw_capex) if raw_capex is not None else None,
-        "interest_expense": abs(raw_interest) if raw_interest is not None else None,
-        "pretax_income": pretax_income,
-        "tax_provision": tax_provision,
-    }
-    sourced_inputs, source_metadata = cash_flow_source(
-        company.ticker,
-        market_statement_date,
-        normalized_market_inputs,
+    tax_rate = _calculate_tax_rate(
+        values["pretax_income"],
+        values["tax_provision"],
     )
-    sourced_pretax = sourced_inputs.get("pretax_income")
-    sourced_tax = sourced_inputs.get("tax_provision")
-    tax_rate = None
-    if sourced_pretax not in (None, 0) and sourced_tax is not None:
-        calculated_tax_rate = sourced_tax / sourced_pretax
-        if 0 <= calculated_tax_rate <= 1:
-            tax_rate = calculated_tax_rate
-    values = {
-        "operating_cf": sourced_inputs.get("operating_cf"),
-        "capex": sourced_inputs.get("capex"),
-        "interest_expense": sourced_inputs.get("interest_expense"),
+    formula_values = {
+        "operating_cf": values["operating_cf"],
+        "capex": values["capex"],
+        "interest_expense": None,
         "tax_rate": tax_rate,
-        "ebit": ebit,
-        "da": da,
-        "change_nwc": change_nwc,
-        "revenue": revenue,
+        "ebit": values["ebit"],
+        "da": values["da"],
+        "change_nwc": values["change_nwc"],
+        "revenue": values["revenue"],
     }
 
-    formula_errors = {}
-    results = {}
+    formula_errors: dict[str, str] = {}
+    results: dict[str, Optional[float]] = {}
     for key in ("free_cash_flow", "fcff"):
         try:
-            results[key] = evaluate_formula(expressions[key], values)
+            results[key] = evaluate_formula(expressions[key], formula_values)
         except (FormulaInputError, FormulaValidationError, KeyError) as exc:
             results[key] = None
             formula_errors[key] = str(exc)
 
-    interest_expense = values["interest_expense"]
-    after_tax_interest = None
-    if interest_expense is not None and tax_rate is not None:
-        after_tax_interest = interest_expense * (1 - tax_rate)
     free_cf = results["free_cash_flow"]
-    fcff = results["fcff"]
+    if values["operating_cf"] is None or values["capex"] is None:
+        fcf_explanation = "FCF is unavailable because a filed input is missing."
+    elif free_cf is not None and free_cf < 0:
+        fcf_explanation = (
+            "FCF is negative because filed cash capital expenditure exceeds filed "
+            "operating cash flow; the sign is preserved."
+        )
+    else:
+        fcf_explanation = (
+            "FCF equals filed operating cash flow less positive filed cash capex."
+        )
+
+    if results["fcff"] is None:
+        fcff_explanation = (
+            "FCFF is unavailable: compatible filed EBIT and change-in-operating-"
+            "working-capital inputs are not disclosed for this snapshot. P&L finance "
+            "costs are not substituted for cash interest."
+        )
+    else:
+        fcff_explanation = "FCFF uses only compatible filed inputs."
+
     return {
-        "raw_operating_cf": operating_cf,
-        "raw_capex": raw_capex,
-        "raw_interest_expense": raw_interest,
-        "raw_reported_free_cf": raw_reported_free_cf,
+        "raw_operating_cf": values["operating_cf"],
+        "raw_capex": -values["capex"] if values["capex"] is not None else None,
+        "raw_interest_expense": None,
+        "raw_reported_free_cf": None,
         "operating_cf": values["operating_cf"],
         "capex": values["capex"],
-        "interest_expense": interest_expense,
-        "pretax_income": sourced_pretax,
-        "tax_provision": sourced_tax,
+        "interest_expense": None,
+        "pretax_income": values["pretax_income"],
+        "tax_provision": values["tax_provision"],
         "tax_rate": round(tax_rate, 6) if tax_rate is not None else None,
-        "after_tax_interest": after_tax_interest,
+        "after_tax_interest": None,
         "free_cf": free_cf,
-        "fcff": fcff,
+        "fcff": results["fcff"],
         "fcf_formula": expressions["free_cash_flow"],
         "fcff_formula": expressions["fcff"],
         "formula_errors": formula_errors,
-        "cash_flow_explanation": _cash_flow_explanation(
-            values["operating_cf"],
-            values["capex"],
-            free_cf,
-            fcff,
-            after_tax_interest,
+        "cash_flow_explanation": f"{fcf_explanation} {fcff_explanation}",
+        "cash_flow_statement_date": statement["statement_date"],
+        "data_source_name": statement["source_name"],
+        "data_source_url": statement["source_url"],
+        "data_source_type": statement["source_type"],
+        "source_captured_at": datetime.now(IST).strftime(
+            "%d-%m-%Y %H:%M:%S IST"
         ),
-        **source_metadata,
+        "source_freshness_status": "Latest configured complete filing period",
+        "cross_check_status": "Filing-only validation",
+        "cross_check_detail": (
+            "No secondary finance source was queried, compared, or substituted."
+        ),
+        "source_input_note": (
+            "Finance costs are shown in the provenance ledger but are excluded from "
+            "FCFF because they are not equivalent to cash interest paid."
+        ),
+        "official_raw_capex": (
+            -values["capex"] if values["capex"] is not None else None
+        ),
+    }
+
+
+def _missing_provenance(
+    field: str,
+    statement: dict,
+    reason: str = "Not disclosed on a compatible filed basis",
+) -> dict:
+    return {
+        "field": field,
+        "label": field.replace("_", " ").title(),
+        "raw_value": None,
+        "normalized_inr": None,
+        "source_url": statement["source_url"],
+        "statement_period": statement["statement_period"],
+        "scope": statement["scope"],
+        "audit_status": statement["audit_status"],
+        "statement_section": "Unavailable",
+        "page_or_note": reason,
+        "validation_status": "unavailable",
+        "caveat": reason,
+    }
+
+
+def _audit_entry(
+    *,
+    statement: dict,
+    expression: str,
+    inputs: dict[str, Optional[float]],
+    result: Optional[float],
+    units: str,
+    provenance_fields: Optional[dict[str, str]] = None,
+    unavailable_reason: str = "",
+) -> dict:
+    field_map = provenance_fields or {name: name for name in inputs}
+    provenance: dict[str, dict] = {}
+    source_urls: dict[str, str] = {}
+    for input_name in inputs:
+        field = field_map.get(input_name, input_name)
+        item = statement["field_provenance"].get(field)
+        if item is None:
+            item = _missing_provenance(field, statement)
+        provenance[input_name] = item
+        source_urls[input_name] = item["source_url"]
+    return {
+        "formula": expression,
+        "formula_inputs": inputs,
+        "formula_source_urls": source_urls,
+        "formula_input_provenance": provenance,
+        "result": result,
+        "units": units,
+        "statement_date": statement["statement_date"],
+        "statement_period": statement["statement_period"],
+        "scope": statement["scope"],
+        "unavailable_reason": unavailable_reason if result is None else "",
     }
 
 
@@ -183,119 +219,34 @@ def _company_ratios(
 ) -> dict:
     statement = official_statement(company.ticker)
     if statement is None:
-        raise ValueError(f"No official financial statement configured for {company.ticker}")
+        raise ValueError(
+            f"No filed annual or quarterly statement configured for {company.ticker}"
+        )
+
     values = statement["values"]
     revenue = values["revenue"]
-    revenue_prev = values["revenue_previous"]
+    revenue_previous = values["revenue_previous"]
     net_income = values["net_income"]
-    net_income_prev = values["net_income_previous"]
-    pretax_income = values["pretax_income"]
-    tax_provision = values["tax_provision"]
-    interest = values["finance_costs"]
-    da = values["da"]
-    assets = values["total_assets"]
+    net_income_previous = values["net_income_previous"]
+    total_assets = values["total_assets"]
+    total_assets_previous = values["total_assets_previous"]
     current_assets = values["current_assets"]
     current_liabilities = values["current_liabilities"]
     inventory = values["inventory"]
     cash = values["cash"]
-    debt = values["total_debt"]
-    equity = values["total_equity"]
-    operating_cf = values["operating_cf"]
-    raw_capex = values["capex"]
-    statement_date = statement["statement_date"]
-    cash_flow = _cash_flow_analysis(
-        company,
-        statement_date,
-        operating_cf,
-        raw_capex,
-        interest,
-        pretax_income,
-        tax_provision,
-        pretax_income + interest
-        if pretax_income is not None and interest is not None
-        else None,
-        da,
-        None,
-        revenue,
-        formulas,
-    )
-    source_urls = {
-        field: statement["source_url"]
-        for field, value in values.items()
-        if value is not None
-    }
-    metric_inputs = {
-        "roe": ("(net_income / total_equity) * 100", {
-            "net_income": net_income,
-            "total_equity": equity,
-        }),
-        "roa": ("(net_income / total_assets) * 100", {
-            "net_income": net_income,
-            "total_assets": assets,
-        }),
-        "net_margin": ("(net_income / revenue) * 100", {
-            "net_income": net_income,
-            "revenue": revenue,
-        }),
-        "debt_to_equity": ("total_debt / total_equity", {
-            "total_debt": debt,
-            "total_equity": equity,
-        }),
-        "debt_to_assets": ("total_debt / total_assets", {
-            "total_debt": debt,
-            "total_assets": assets,
-        }),
-        "current_ratio": ("current_assets / current_liabilities", {
-            "current_assets": current_assets,
-            "current_liabilities": current_liabilities,
-        }),
-        "quick_ratio": (
-            "(current_assets - inventory) / current_liabilities",
-            {
-                "current_assets": current_assets,
-                "inventory": inventory,
-                "current_liabilities": current_liabilities,
-            },
-        ),
-        "operating_cf_margin": ("(operating_cf / revenue) * 100", {
-            "operating_cf": cash_flow["operating_cf"],
-            "revenue": revenue,
-        }),
-        "fcf_margin": ("(free_cf / revenue) * 100", {
-            "free_cf": cash_flow["free_cf"],
-            "revenue": revenue,
-        }),
-        "fcff_margin": ("(fcff / revenue) * 100", {
-            "fcff": cash_flow["fcff"],
-            "revenue": revenue,
-        }),
-        "cash_conversion": ("operating_cf / net_income", {
-            "operating_cf": cash_flow["operating_cf"],
-            "net_income": net_income,
-        }),
-        "capex_to_revenue": ("(capex / revenue) * 100", {
-            "capex": cash_flow["capex"],
-            "revenue": revenue,
-        }),
-        "revenue_growth": (
-            "((revenue - revenue_previous) / abs(revenue_previous)) * 100",
-            {"revenue": revenue, "revenue_previous": revenue_prev},
-        ),
-        "profit_growth": (
-            "((net_income - net_income_previous) / abs(net_income_previous)) * 100",
-            {"net_income": net_income, "net_income_previous": net_income_prev},
-        ),
-        "asset_turnover": ("revenue / total_assets", {
-            "revenue": revenue,
-            "total_assets": assets,
-        }),
-    }
+    total_debt = values["total_debt"]
+    total_equity = values["total_equity"]
+    total_equity_previous = values["total_equity_previous"]
+    average_assets = _average(total_assets, total_assets_previous)
+    average_equity = _average(total_equity, total_equity_previous)
+    cash_flow = _cash_flow_analysis(statement, formulas)
+
     results = {
-        "roe": _ratio(net_income, equity, True),
-        "roa": _ratio(net_income, assets, True),
+        "roe": _ratio(net_income, average_equity, True),
+        "roa": _ratio(net_income, average_assets, True),
         "net_margin": _ratio(net_income, revenue, True),
-        "debt_to_equity": _ratio(debt, equity),
-        "debt_to_assets": _ratio(debt, assets),
+        "debt_to_equity": _ratio(total_debt, total_equity),
+        "debt_to_assets": _ratio(total_debt, total_assets),
         "current_ratio": _ratio(current_assets, current_liabilities),
         "quick_ratio": _ratio(
             current_assets - inventory
@@ -308,74 +259,232 @@ def _company_ratios(
         "fcff_margin": _ratio(cash_flow["fcff"], revenue, True),
         "cash_conversion": _ratio(cash_flow["operating_cf"], net_income),
         "capex_to_revenue": _ratio(cash_flow["capex"], revenue, True),
-        "revenue_growth": _growth(revenue, revenue_prev),
-        "profit_growth": _growth(net_income, net_income_prev),
-        "asset_turnover": _ratio(revenue, assets),
+        "revenue_growth": _growth(revenue, revenue_previous),
+        "profit_growth": _growth(net_income, net_income_previous),
+        "asset_turnover": _ratio(revenue, average_assets),
     }
-    formula_audit = {}
-    for key, (expression, inputs) in metric_inputs.items():
-        formula_audit[key] = {
-            "formula": expression,
-            "formula_inputs": inputs,
-            "formula_source_urls": {
-                input_name: statement["source_url"] for input_name in inputs
+
+    formula_audit = {
+        "roe": _audit_entry(
+            statement=statement,
+            expression=(
+                "net_income / ((total_equity + total_equity_previous) / 2) * 100"
+            ),
+            inputs={
+                "net_income": net_income,
+                "total_equity": total_equity,
+                "total_equity_previous": total_equity_previous,
             },
-            "result": results[key],
-            "units": "%" if key in {
-                "roe",
-                "roa",
-                "net_margin",
-                "operating_cf_margin",
-                "fcf_margin",
-                "fcff_margin",
-                "capex_to_revenue",
-                "revenue_growth",
-                "profit_growth",
-            } else "x",
-        }
-    formula_audit["free_cf"] = {
-        "formula": cash_flow["fcf_formula"],
-        "formula_inputs": {
-            "operating_cf": cash_flow["operating_cf"],
-            "capex": cash_flow["capex"],
-        },
-        "formula_source_urls": {
-            "operating_cf": statement["source_url"],
-            "capex": statement["source_url"],
-        },
-        "result": cash_flow["free_cf"],
-        "units": "INR",
+            result=results["roe"],
+            units="%",
+        ),
+        "roa": _audit_entry(
+            statement=statement,
+            expression=(
+                "net_income / ((total_assets + total_assets_previous) / 2) * 100"
+            ),
+            inputs={
+                "net_income": net_income,
+                "total_assets": total_assets,
+                "total_assets_previous": total_assets_previous,
+            },
+            result=results["roa"],
+            units="%",
+        ),
+        "net_margin": _audit_entry(
+            statement=statement,
+            expression="net_income / revenue * 100",
+            inputs={"net_income": net_income, "revenue": revenue},
+            result=results["net_margin"],
+            units="%",
+        ),
+        "debt_to_equity": _audit_entry(
+            statement=statement,
+            expression="total_debt / total_equity",
+            inputs={"total_debt": total_debt, "total_equity": total_equity},
+            result=results["debt_to_equity"],
+            units="x",
+        ),
+        "debt_to_assets": _audit_entry(
+            statement=statement,
+            expression="total_debt / total_assets",
+            inputs={"total_debt": total_debt, "total_assets": total_assets},
+            result=results["debt_to_assets"],
+            units="x",
+        ),
+        "current_ratio": _audit_entry(
+            statement=statement,
+            expression="current_assets / current_liabilities",
+            inputs={
+                "current_assets": current_assets,
+                "current_liabilities": current_liabilities,
+            },
+            result=results["current_ratio"],
+            units="x",
+        ),
+        "quick_ratio": _audit_entry(
+            statement=statement,
+            expression="(current_assets - inventory) / current_liabilities",
+            inputs={
+                "current_assets": current_assets,
+                "inventory": inventory,
+                "current_liabilities": current_liabilities,
+            },
+            result=results["quick_ratio"],
+            units="x",
+        ),
+        "operating_cf_margin": _audit_entry(
+            statement=statement,
+            expression="operating_cf / revenue * 100",
+            inputs={
+                "operating_cf": cash_flow["operating_cf"],
+                "revenue": revenue,
+            },
+            result=results["operating_cf_margin"],
+            units="%",
+        ),
+        "fcf_margin": _audit_entry(
+            statement=statement,
+            expression="(operating_cf - capex) / revenue * 100",
+            inputs={
+                "operating_cf": cash_flow["operating_cf"],
+                "capex": cash_flow["capex"],
+                "revenue": revenue,
+            },
+            result=results["fcf_margin"],
+            units="%",
+        ),
+        "fcff_margin": _audit_entry(
+            statement=statement,
+            expression=(
+                "(ebit * (1 - tax_rate) + da - capex - change_nwc) "
+                "/ revenue * 100"
+            ),
+            inputs={
+                "ebit": values["ebit"],
+                "tax_rate": cash_flow["tax_rate"],
+                "da": values["da"],
+                "capex": values["capex"],
+                "change_nwc": values["change_nwc"],
+                "revenue": revenue,
+            },
+            provenance_fields={
+                "ebit": "ebit",
+                "tax_rate": "tax_provision",
+                "da": "da",
+                "capex": "capex",
+                "change_nwc": "change_nwc",
+                "revenue": "revenue",
+            },
+            result=results["fcff_margin"],
+            units="%",
+            unavailable_reason=(
+                "FCFF is unavailable because compatible filed inputs are missing."
+            ),
+        ),
+        "cash_conversion": _audit_entry(
+            statement=statement,
+            expression="operating_cf / net_income",
+            inputs={
+                "operating_cf": cash_flow["operating_cf"],
+                "net_income": net_income,
+            },
+            result=results["cash_conversion"],
+            units="x",
+        ),
+        "capex_to_revenue": _audit_entry(
+            statement=statement,
+            expression="capex / revenue * 100",
+            inputs={"capex": cash_flow["capex"], "revenue": revenue},
+            result=results["capex_to_revenue"],
+            units="%",
+        ),
+        "revenue_growth": _audit_entry(
+            statement=statement,
+            expression="(revenue - revenue_previous) / abs(revenue_previous) * 100",
+            inputs={
+                "revenue": revenue,
+                "revenue_previous": revenue_previous,
+            },
+            result=results["revenue_growth"],
+            units="%",
+        ),
+        "profit_growth": _audit_entry(
+            statement=statement,
+            expression=(
+                "(net_income - net_income_previous) / "
+                "abs(net_income_previous) * 100"
+            ),
+            inputs={
+                "net_income": net_income,
+                "net_income_previous": net_income_previous,
+            },
+            result=results["profit_growth"],
+            units="%",
+        ),
+        "asset_turnover": _audit_entry(
+            statement=statement,
+            expression=(
+                "revenue / ((total_assets + total_assets_previous) / 2)"
+            ),
+            inputs={
+                "revenue": revenue,
+                "total_assets": total_assets,
+                "total_assets_previous": total_assets_previous,
+            },
+            result=results["asset_turnover"],
+            units="x",
+        ),
+        "free_cf": _audit_entry(
+            statement=statement,
+            expression=cash_flow["fcf_formula"],
+            inputs={
+                "operating_cf": cash_flow["operating_cf"],
+                "capex": cash_flow["capex"],
+            },
+            result=cash_flow["free_cf"],
+            units="INR",
+        ),
+        "tax_rate": _audit_entry(
+            statement=statement,
+            expression="tax_provision / pretax_income * 100",
+            inputs={
+                "tax_provision": values["tax_provision"],
+                "pretax_income": values["pretax_income"],
+            },
+            result=(
+                cash_flow["tax_rate"] * 100
+                if cash_flow["tax_rate"] is not None
+                else None
+            ),
+            units="%",
+        ),
+        "fcff": _audit_entry(
+            statement=statement,
+            expression=cash_flow["fcff_formula"],
+            inputs={
+                "ebit": values["ebit"],
+                "tax_rate": cash_flow["tax_rate"],
+                "da": values["da"],
+                "capex": values["capex"],
+                "change_nwc": values["change_nwc"],
+            },
+            provenance_fields={
+                "ebit": "ebit",
+                "tax_rate": "tax_provision",
+                "da": "da",
+                "capex": "capex",
+                "change_nwc": "change_nwc",
+            },
+            result=cash_flow["fcff"],
+            units="INR",
+            unavailable_reason=(
+                "Compatible filed EBIT and change-in-working-capital inputs are "
+                "unavailable; finance costs are not substituted."
+            ),
+        ),
     }
-    formula_audit["tax_rate"] = {
-        "formula": "tax_provision / pretax_income",
-        "formula_inputs": {
-            "tax_provision": tax_provision,
-            "pretax_income": pretax_income,
-        },
-        "formula_source_urls": {
-            "tax_provision": statement["source_url"],
-            "pretax_income": statement["source_url"],
-        },
-        "result": cash_flow["tax_rate"] * 100
-        if cash_flow["tax_rate"] is not None
-        else None,
-        "units": "%",
-    }
-    formula_audit["fcff"] = {
-        "formula": cash_flow["fcff_formula"],
-        "formula_inputs": {
-            "operating_cf": cash_flow["operating_cf"],
-            "interest_expense": cash_flow["interest_expense"],
-            "tax_rate": cash_flow["tax_rate"],
-            "capex": cash_flow["capex"],
-        },
-        "formula_source_urls": {
-            input_name: statement["source_url"]
-            for input_name in ("operating_cf", "interest_expense", "tax_rate", "capex")
-        },
-        "result": cash_flow["fcff"],
-        "units": "INR",
-    }
+
     source_validation = validate_source_url(statement["source_url"], timeout=8)
     document_validation = (
         validate_source_url(statement["document_url"], timeout=8)
@@ -383,6 +492,10 @@ def _company_ratios(
         and statement["document_url"] != statement["source_url"]
         else source_validation
     )
+    source_urls = {
+        field: provenance["source_url"]
+        for field, provenance in statement["field_provenance"].items()
+    }
 
     return {
         "name": company.name,
@@ -390,7 +503,8 @@ def _company_ratios(
         "exchange": company.exchange,
         "currency": company.currency,
         "financial_currency": "INR",
-        "statement_date": statement_date,
+        "statement_date": statement["statement_date"],
+        "statement_period": statement["statement_period"],
         "captured_at": datetime.now(IST).strftime("%d-%m-%Y %H:%M:%S IST"),
         "source_published_date": statement["published_date"],
         "data_source_name": statement["source_name"],
@@ -407,11 +521,24 @@ def _company_ratios(
         "document_link_status": document_validation["status"],
         "document_link_reason": document_validation["reason"],
         "scope": statement["scope"],
+        "audit_status": statement["audit_status"],
+        "debt_definition": statement["debt_definition"],
         "raw_currency": statement["raw_currency"],
         "raw_unit": statement["raw_unit"],
         "raw_values": statement["raw_values"],
         "normalized_values": values,
         "statement_value_source_urls": source_urls,
+        "field_provenance": statement["field_provenance"],
+        "accuracy_ledger": list(statement["field_provenance"].values()),
+        "latest_filing": statement["latest_filing"],
+        "period_scope_validation": (
+            f"Validated: {statement['statement_period']} / "
+            f"{statement['scope']} / {statement['audit_status']}"
+        ),
+        "ratio_basis_note": (
+            "ROE, ROA and asset turnover use average opening/closing balances. "
+            "Debt ratios use borrowings excluding leases for all companies."
+        ),
         "market_data_classification": "Market-derived metrics shown separately",
         "pe": None,
         "forward_pe": None,
@@ -426,174 +553,13 @@ def _company_ratios(
         **cash_flow,
         "formula_audit": formula_audit,
         "revenue": revenue,
-        "revenue_previous": revenue_prev,
+        "revenue_previous": revenue_previous,
         "net_income": net_income,
-        "net_income_previous": net_income_prev,
-        "total_debt": debt,
+        "net_income_previous": net_income_previous,
+        "total_debt": total_debt,
         "cash": cash,
-    }
-
-
-_FUNDAMENTAL_TYPES = (
-    "trailingMarketCap,trailingPeRatio,trailingForwardPeRatio,trailingPsRatio,"
-    "trailingEnterpriseValue,trailingDividendYield,annualTotalRevenue,"
-    "annualNetIncome,annualEBIT,annualEBITDA,annualInterestExpense,"
-    "annualPretaxIncome,annualTaxProvision,"
-    "annualDepreciationAndAmortizationInIncomeStatement,"
-    "annualChangeInWorkingCapital,"
-    "annualTotalAssets,annualCurrentAssets,annualCurrentLiabilities,"
-    "annualInventory,annualCashCashEquivalentsAndShortTermInvestments,"
-    "annualTotalDebt,annualStockholdersEquity,annualOperatingCashFlow,"
-    "annualCapitalExpenditure,annualFreeCashFlow"
-)
-
-
-def _timeseries(data: dict) -> dict[str, list[dict]]:
-    values = {}
-    for result in data.get("timeseries", {}).get("result", []):
-        types = result.get("meta", {}).get("type", [])
-        if not types:
-            continue
-        metric = types[0]
-        values[metric] = sorted(result.get(metric, []), key=lambda item: item.get("asOfDate", ""))
-    return values
-
-
-def _latest(series: dict[str, list[dict]], metric: str, offset: int = 0) -> Optional[float]:
-    values = series.get(metric, [])
-    if len(values) <= offset:
-        return None
-    return _n(values[-1 - offset].get("reportedValue", {}).get("raw"))
-
-
-def _latest_currency(series: dict[str, list[dict]], metric: str) -> Optional[str]:
-    values = series.get(metric, [])
-    if not values:
-        return None
-    latest = values[-1]
-    return (
-        latest.get("currencyCode")
-        or latest.get("reportedValue", {}).get("currencyCode")
-    )
-
-
-def _company_ratios_fallback(
-    company: Company,
-    formulas: Optional[dict[str, str]] = None,
-) -> dict:
-    now_ist = datetime.now(IST)
-    response = httpx.get(
-        f"https://query1.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/{company.ticker}",
-        params={
-            "symbol": company.ticker,
-            "type": _FUNDAMENTAL_TYPES,
-            "period1": int((now_ist - timedelta(days=1460)).timestamp()),
-            "period2": int((now_ist + timedelta(days=1)).timestamp()),
-        },
-        headers={"User-Agent": "Mozilla/5.0"},
-        timeout=30,
-    )
-    response.raise_for_status()
-    series = _timeseries(response.json())
-    statement_dates = [
-        item.get("asOfDate")
-        for metric, values in series.items()
-        if metric.startswith("annual")
-        for item in values
-        if item.get("asOfDate")
-    ]
-    if not statement_dates:
-        raise ValueError("Yahoo fundamentals returned no annual statements")
-
-    revenue = _latest(series, "annualTotalRevenue")
-    revenue_prev = _latest(series, "annualTotalRevenue", 1)
-    net_income = _latest(series, "annualNetIncome")
-    net_income_prev = _latest(series, "annualNetIncome", 1)
-    ebit = _latest(series, "annualEBIT")
-    ebitda = _latest(series, "annualEBITDA")
-    interest = _latest(series, "annualInterestExpense")
-    pretax_income = _latest(series, "annualPretaxIncome")
-    tax_provision = _latest(series, "annualTaxProvision")
-    da = _latest(series, "annualDepreciationAndAmortizationInIncomeStatement")
-    change_nwc = _latest(series, "annualChangeInWorkingCapital")
-    assets = _latest(series, "annualTotalAssets")
-    current_assets = _latest(series, "annualCurrentAssets")
-    current_liabilities = _latest(series, "annualCurrentLiabilities")
-    inventory = _latest(series, "annualInventory") or 0
-    cash = _latest(series, "annualCashCashEquivalentsAndShortTermInvestments")
-    debt = _latest(series, "annualTotalDebt")
-    equity = _latest(series, "annualStockholdersEquity")
-    operating_cf = _latest(series, "annualOperatingCashFlow")
-    raw_capex = _latest(series, "annualCapitalExpenditure")
-    raw_reported_free_cf = _latest(series, "annualFreeCashFlow")
-    market_cap = _latest(series, "trailingMarketCap")
-    enterprise_value = _latest(series, "trailingEnterpriseValue")
-    dividend_yield = _latest(series, "trailingDividendYield")
-    financial_currency = (
-        _latest_currency(series, "annualTotalRevenue")
-        or _latest_currency(series, "annualTotalAssets")
-        or company.currency
-    )
-    statement_date = datetime.fromisoformat(max(statement_dates)).strftime("%d-%m-%Y")
-    cash_flow = _cash_flow_analysis(
-        company,
-        statement_date,
-        operating_cf,
-        raw_capex,
-        interest,
-        pretax_income,
-        tax_provision,
-        ebit,
-        da,
-        change_nwc,
-        revenue,
-        formulas,
-        raw_reported_free_cf,
-    )
-
-    return {
-        "name": company.name,
-        "ticker": company.ticker,
-        "exchange": company.exchange,
-        "currency": company.currency,
-        "financial_currency": financial_currency,
-        "statement_date": statement_date,
-        "captured_at": now_ist.strftime("%d-%m-%Y %H:%M:%S IST"),
-        "market_cap": market_cap,
-        "enterprise_value": enterprise_value,
-        "pe": _latest(series, "trailingPeRatio"),
-        "forward_pe": _latest(series, "trailingForwardPeRatio"),
-        "price_to_book": _ratio(market_cap, equity),
-        "price_to_sales": _latest(series, "trailingPsRatio") or _ratio(market_cap, revenue),
-        "ev_to_ebitda": _ratio(enterprise_value, ebitda),
-        "dividend_yield": round(dividend_yield * 100, 2) if dividend_yield else None,
-        "roe": _ratio(net_income, equity, True),
-        "roa": _ratio(net_income, assets, True),
-        "net_margin": _ratio(net_income, revenue, True),
-        "operating_margin": _ratio(ebit, revenue, True),
-        "ebitda_margin": _ratio(ebitda, revenue, True),
-        "debt_to_equity": _ratio(debt, equity),
-        "debt_to_assets": _ratio(debt, assets),
-        "current_ratio": _ratio(current_assets, current_liabilities),
-        "quick_ratio": _ratio(
-            (current_assets - inventory) if current_assets is not None else None,
-            current_liabilities,
-        ),
-        "interest_coverage": _ratio(ebit, abs(interest) if interest else None),
-        **cash_flow,
-        "operating_cf_margin": _ratio(cash_flow["operating_cf"], revenue, True),
-        "fcf_margin": _ratio(cash_flow["free_cf"], revenue, True),
-        "fcff_margin": _ratio(cash_flow["fcff"], revenue, True),
-        "cash_conversion": _ratio(cash_flow["operating_cf"], net_income),
-        "capex_to_revenue": _ratio(cash_flow["capex"], revenue, True),
-        "revenue_growth": _growth(revenue, revenue_prev),
-        "profit_growth": _growth(net_income, net_income_prev),
-        "asset_turnover": _ratio(revenue, assets),
-        "revenue": revenue,
-        "net_income": net_income,
-        "total_debt": debt,
-        "cash": cash,
-        "source": "Yahoo Finance fundamentals timeseries fallback",
+        "average_assets": average_assets,
+        "average_equity": average_equity,
     }
 
 
@@ -601,7 +567,7 @@ async def fetch_and_store_ratios(
     companies: Optional[list[Company]] = None,
     formulas: Optional[dict[str, str]] = None,
 ) -> list[dict]:
-    """Fetch current ratios and upsert one snapshot per statement date."""
+    """Calculate filing-only ratios and store one snapshot per statement date."""
     source = companies if companies is not None else DEFAULT_COMPANIES
     rows = []
     for company in listed_companies(source):
@@ -609,8 +575,8 @@ async def fetch_and_store_ratios(
             row = _company_ratios(company, formulas)
             await save_ratio_snapshot(row)
             rows.append(row)
-        except Exception as e:  # noqa: BLE001
-            log.error(f"official ratio calculation failed for {company.ticker}: {e}")
+        except Exception as exc:  # noqa: BLE001
+            log.error("official ratio calculation failed for %s: %s", company.ticker, exc)
             rows.append({
                 "name": company.name,
                 "ticker": company.ticker,
@@ -618,10 +584,9 @@ async def fetch_and_store_ratios(
                 "currency": company.currency,
                 "financial_currency": "INR",
                 "statement_date": "N/A",
-                "error": str(e),
+                "error": str(exc),
                 "official_source_unavailable": True,
             })
-    # Include unlisted company explicitly to avoid implying missing coverage.
     for company in source:
         if company.active and not company.listed:
             rows.append({

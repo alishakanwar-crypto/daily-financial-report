@@ -16,6 +16,7 @@ from solar.database import (
     save_ratio_snapshot,
 )
 from solar.routes.web import router
+from solar.formulas import DEFAULT_FORMULAS
 
 
 class FormulaRouteTests(unittest.TestCase):
@@ -47,7 +48,28 @@ class FormulaRouteTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertIn("operating_cf - capex", response.text)
+        self.assertIn(DEFAULT_FORMULAS["fcff"]["expression"], response.text)
         self.assertIn("Only arithmetic is accepted", response.text)
+
+    def test_legacy_cfo_fcff_default_is_migrated(self):
+        async def set_legacy_formula() -> None:
+            import aiosqlite
+
+            async with aiosqlite.connect(self.db_path) as db:
+                await db.execute(
+                    "UPDATE financial_formulas SET expression=? WHERE key='fcff'",
+                    (
+                        "operating_cf + interest_expense * "
+                        "(1 - tax_rate) - capex",
+                    ),
+                )
+                await db.commit()
+
+        asyncio.run(set_legacy_formula())
+        asyncio.run(init_db())
+        formulas = asyncio.run(financial_formulas())
+        saved = {formula["key"]: formula["expression"] for formula in formulas}
+        self.assertEqual(saved["fcff"], DEFAULT_FORMULAS["fcff"]["expression"])
 
     def test_authenticated_formula_update_persists(self):
         response = self.client.post(

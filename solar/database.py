@@ -214,6 +214,24 @@ async def init_db() -> None:
                     now_ist(),
                 ),
             )
+            await db.execute(
+                """UPDATE financial_formulas
+                   SET label=?, description=?
+                   WHERE key=?""",
+                (formula["label"], formula["description"], key),
+            )
+        await db.execute(
+            """UPDATE financial_formulas
+               SET expression=?, updated_at=?
+               WHERE key='fcff'
+                 AND expression=?
+            """,
+            (
+                DEFAULT_FORMULAS["fcff"]["expression"],
+                now_ist(),
+                "operating_cf + interest_expense * (1 - tax_rate) - capex",
+            ),
+        )
         await db.commit()
     finally:
         await db.close()

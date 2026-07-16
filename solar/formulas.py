@@ -24,11 +24,12 @@ DEFAULT_FORMULAS = {
         "description": "Operating cash flow less normalized positive capital expenditure.",
     },
     "fcff": {
-        "label": "FCFF (CFO-based approximation)",
-        "expression": "operating_cf + interest_expense * (1 - tax_rate) - capex",
+        "label": "FCFF (standard filed-input method)",
+        "expression": "ebit * (1 - tax_rate) + da - capex - change_nwc",
         "description": (
-            "Operating cash flow plus after-tax financing expense less normalized "
-            "positive capital expenditure."
+            "NOPAT plus depreciation and amortisation, less cash capital expenditure "
+            "and the change in operating working capital. Returns N/A unless every "
+            "input is disclosed on a compatible filed basis."
         ),
     },
 }

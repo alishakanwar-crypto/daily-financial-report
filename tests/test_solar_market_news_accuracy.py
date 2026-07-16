@@ -4,22 +4,34 @@ import json
 import unittest
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from solar.config import DEFAULT_COMPANIES, IST
 from solar.data.prices import (
     OFFICIAL_MARKET_REGISTRY,
+    _completed_session_label,
     _fetch_usd_inr,
     _parse_bse_graph,
     _parse_bse_history,
     _parse_nasdaq_rows,
     _price_row,
 )
-from solar.news.ai_analyst import _fallback, _validated_choice
+from solar.news.ai_analyst import _article_was_sent, _fallback, _validated_choice
 from solar.news.fetcher import MIN_RELEVANCE_SCORE, qualify_article
 
 
 class OfficialMarketDataTests(unittest.TestCase):
+    def test_completed_session_label_sorts_dates_chronologically(self):
+        rows = [
+            {"trade_date": "01-08-2026", "close": 2},
+            {"trade_date": "31-07-2026", "close": 1},
+        ]
+
+        self.assertEqual(
+            _completed_session_label(rows),
+            "Latest completed sessions: 31-07-2026, 01-08-2026",
+        )
+
     @patch("solar.data.prices.httpx.get")
     def test_malformed_fbil_payload_degrades_to_unavailable_fx(self, get):
         get.return_value.raise_for_status.return_value = None
@@ -221,6 +233,21 @@ class NewsQualificationTests(unittest.TestCase):
         }, article)
         self.assertEqual(valid["impact_score"], 82.0)
         self.assertEqual(valid["companies_affected"], ["Premier Energies"])
+
+
+class NewsSentHistoryTests(unittest.IsolatedAsyncioTestCase):
+    @patch(
+        "solar.news.ai_analyst.article_was_sent",
+        new_callable=AsyncMock,
+    )
+    async def test_precanonical_url_history_prevents_one_time_resend(self, was_sent):
+        was_sent.side_effect = lambda url: "utm_source=legacy" in url
+        article = {
+            "url": "https://example.com/story",
+            "original_url": "https://example.com/story?utm_source=legacy",
+        }
+
+        self.assertTrue(await _article_was_sent(article))
 
 
 if __name__ == "__main__":

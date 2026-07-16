@@ -131,6 +131,14 @@ def _safe_summary(articles: list[dict]) -> str:
     )
 
 
+async def _article_was_sent(article: dict) -> bool:
+    urls = {article["url"], article.get("original_url", "")}
+    for url in urls:
+        if url and await article_was_sent(url):
+            return True
+    return False
+
+
 async def analyze_articles(
     articles: list[dict],
     category: str,
@@ -140,7 +148,7 @@ async def analyze_articles(
     fresh = []
     for article in articles:
         # Allow current official government context to recur; de-duplicate ordinary news.
-        if category == "government" or not await article_was_sent(article["url"]):
+        if category == "government" or not await _article_was_sent(article):
             fresh.append(article)
     if not fresh:
         return {"articles": [], "executive_summary": "No qualifying new items found.", "watch_items": []}
@@ -206,7 +214,7 @@ async def analyze_supplementary_articles(
 ) -> dict:
     fresh = []
     for article in articles:
-        if not await article_was_sent(article["url"]):
+        if not await _article_was_sent(article):
             fresh.append(article)
     if not fresh:
         return {
@@ -217,14 +225,6 @@ async def analyze_supplementary_articles(
         }
     if not settings.openai_api_key:
         result = _fallback(fresh, count)
-        for article in result["articles"]:
-            article["one_line_why"] = (
-                f"Current development within the selected "
-                f"{article.get('topic_name', 'supplementary')} topic."
-            )
-            article["investor_takeaway"] = (
-                "Review potential effects on energy, trade, supply chains and markets."
-            )
         result["topics"] = topics
         return result
 

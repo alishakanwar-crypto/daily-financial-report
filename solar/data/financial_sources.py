@@ -570,11 +570,12 @@ def normalized_values(statement: dict) -> dict[str, float | None]:
 
 
 def _field_period(statement: dict, field: str) -> str:
+    if field in {"total_assets_previous", "total_equity_previous"}:
+        prior_date = statement["comparative_period"].removeprefix("Year ended ")
+        return f"As at {prior_date}"
     if field in {
         "revenue_previous",
         "net_income_previous",
-        "total_assets_previous",
-        "total_equity_previous",
     }:
         return statement["comparative_period"]
     if field in {

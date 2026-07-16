@@ -423,6 +423,21 @@ def _fetch_usd_inr(today: date) -> dict:
         }
 
 
+def _completed_session_label(rows: list[dict]) -> str:
+    completed_dates = {
+        datetime.strptime(row["trade_date"], "%d-%m-%Y").date()
+        for row in rows
+        if row.get("close") is not None
+    }
+    if not completed_dates:
+        return "Official completed-session prices unavailable"
+    labels = (
+        session_date.strftime("%d-%m-%Y")
+        for session_date in sorted(completed_dates)
+    )
+    return f"Latest completed sessions: {', '.join(labels)}"
+
+
 def fetch_prices(companies: list[Company] | None = None) -> dict:
     """Return official completed-session prices and daily/weekly/yearly charts."""
     source = companies if companies is not None else DEFAULT_COMPANIES
@@ -491,17 +506,8 @@ def fetch_prices(companies: list[Company] | None = None) -> dict:
             })
 
     fx = _fetch_usd_inr(today)
-    completed_dates = [
-        row["trade_date"]
-        for row in rows
-        if row.get("close") is not None
-    ]
     return {
-        "trading_date": (
-            f"Latest completed sessions: {', '.join(sorted(set(completed_dates)))}"
-            if completed_dates
-            else "Official completed-session prices unavailable"
-        ),
+        "trading_date": _completed_session_label(rows),
         "generated_at": now_ist.strftime("%d-%m-%Y %H:%M:%S IST"),
         "rows": rows,
         "usd_inr_rate": fx["rate"],

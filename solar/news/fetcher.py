@@ -195,8 +195,6 @@ def qualify_article(
         return None
     if not commercial_matches:
         return None
-    if overseas_matches and not india_matches:
-        return None
 
     published = article.get("published")
     hours_old = (
@@ -334,6 +332,7 @@ async def fetch_solar_news(
             continue
         seen.add(key)
         seen_titles.add(title_key)
+        a["original_url"] = a["url"]
         a["url"] = key
         pub = a["published"]
         if pub and pub >= cutoff:

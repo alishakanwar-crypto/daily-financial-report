@@ -122,6 +122,12 @@ class FilingOnlyRegistryTests(unittest.TestCase):
                     )
         waaree = official_statement("WAAREEENER.NS")
         self.assertIn("#page=15", waaree["field_provenance"]["revenue"]["source_url"])
+        self.assertEqual(
+            waaree["field_provenance"]["total_assets_previous"][
+                "statement_period"
+            ],
+            "As at 31-03-2025",
+        )
 
     def test_corrected_waaree_and_emmvee_values_normalize_to_inr(self):
         waaree = official_statement("WAAREEENER.NS")

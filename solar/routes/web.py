@@ -22,13 +22,16 @@ from solar.database import (
     delete_recipient,
     delete_supplementary_topic,
     feedback_for_export,
+    financial_formulas,
     get_db,
     save_feedback,
     set_company_active,
     set_recipient_active,
     set_supplementary_topic_active,
     supplementary_topic_rows,
+    update_financial_formula,
 )
+from solar.formulas import ALLOWED_VARIABLES, FormulaValidationError, validate_formula
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/solar", tags=["Solar Industry Report"])
@@ -54,6 +57,7 @@ def _back(
         "/solar/mailing-list",
         "/solar/companies",
         "/solar/topics",
+        "/solar/formulas",
     }:
         destination = "/solar"
     args = {"token": token}
@@ -141,6 +145,37 @@ async def topic_dashboard(request: Request):
         "active_count": sum(1 for topic in topics if topic["active"]),
         "status": request.query_params.get("status", ""),
     })
+
+
+@router.get("/formulas", response_class=HTMLResponse)
+async def formula_dashboard(request: Request):
+    token = _token(request)
+    _auth(token)
+    formulas = await financial_formulas()
+    return templates.TemplateResponse("formulas.html", {
+        "request": request,
+        "token": token,
+        "formulas": formulas,
+        "allowed_variables": sorted(ALLOWED_VARIABLES),
+        "status": request.query_params.get("status", ""),
+    })
+
+
+@router.post("/formulas")
+async def save_formula(
+    request: Request,
+    formula_key: str = Form(...),
+    expression: str = Form(...),
+    token: str = Form(""),
+):
+    tk = _token(request, token)
+    _auth(tk)
+    try:
+        validate_formula(expression)
+        await update_financial_formula(formula_key, expression)
+    except (FormulaValidationError, ValueError) as exc:
+        return _back(tk, f"Formula not saved: {exc}", "/solar/formulas")
+    return _back(tk, "Formula validated and saved", "/solar/formulas")
 
 
 def _normalized_ticker(ticker: str, exchange: str) -> str:

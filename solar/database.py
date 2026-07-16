@@ -15,6 +15,7 @@ from solar.config import (
     Company,
     settings,
 )
+from solar.formulas import DEFAULT_FORMULAS
 
 
 def now_ist() -> str:
@@ -143,6 +144,13 @@ async def init_db() -> None:
             CREATE TABLE IF NOT EXISTS solar_meta (
               key TEXT PRIMARY KEY, value TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS financial_formulas (
+              key TEXT PRIMARY KEY,
+              label TEXT NOT NULL,
+              expression TEXT NOT NULL,
+              description TEXT NOT NULL DEFAULT '',
+              updated_at TEXT NOT NULL
+            );
             """
         )
         seed = await db.execute(
@@ -192,6 +200,19 @@ async def init_db() -> None:
                    (name,query,active,preset,created_at,updated_at)
                    VALUES(?,?,0,1,?,?)""",
                 (topic["name"], topic["query"], now_ist(), now_ist()),
+            )
+        for key, formula in DEFAULT_FORMULAS.items():
+            await db.execute(
+                """INSERT OR IGNORE INTO financial_formulas
+                   (key,label,expression,description,updated_at)
+                   VALUES(?,?,?,?,?)""",
+                (
+                    key,
+                    formula["label"],
+                    formula["expression"],
+                    formula["description"],
+                    now_ist(),
+                ),
             )
         await db.commit()
     finally:
@@ -557,6 +578,44 @@ async def log_report(report_date: str, status: str, filepath: str = "", error: s
         await db.execute(
             "INSERT INTO reports(report_date,status,filepath,error,created_at) VALUES(?,?,?,?,?)",
             (report_date, status, filepath, error, now_ist()),
+        )
+        await db.commit()
+    finally:
+        await db.close()
+
+
+async def financial_formulas() -> list[dict]:
+    db = await get_db()
+    try:
+        cur = await db.execute(
+            """SELECT key,label,expression,description,updated_at
+               FROM financial_formulas ORDER BY key"""
+        )
+        return [dict(row) for row in await cur.fetchall()]
+    finally:
+        await db.close()
+
+
+async def formula_expressions() -> dict[str, str]:
+    rows = await financial_formulas()
+    if rows:
+        return {row["key"]: row["expression"] for row in rows}
+    return {
+        key: formula["expression"]
+        for key, formula in DEFAULT_FORMULAS.items()
+    }
+
+
+async def update_financial_formula(key: str, expression: str) -> None:
+    if key not in DEFAULT_FORMULAS:
+        raise ValueError("Unknown financial formula")
+    db = await get_db()
+    try:
+        await db.execute(
+            """UPDATE financial_formulas
+               SET expression=?,updated_at=?
+               WHERE key=?""",
+            (expression.strip(), now_ist(), key),
         )
         await db.commit()
     finally:

@@ -1,0 +1,59 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width">
+  <title>Financial Formula Settings</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:#eef7f1;color:#173526;font:14px Arial,sans-serif}
+    .hero{background:linear-gradient(130deg,#063b25,#139250);color:white;padding:38px 5%}
+    .hero h1{margin:4px 0;font-size:32px}.hero p{color:#d9f4e1}
+    .wrap{max-width:1050px;margin:-18px auto 40px;padding:0 18px}
+    .card{background:white;border-radius:12px;padding:20px;box-shadow:0 4px 18px #cadecf;margin-bottom:18px}
+    h2{margin-top:0;color:#075f36;font-size:18px}
+    input,button{padding:11px;border:1px solid #c9dfd0;border-radius:6px}
+    input{width:100%;margin:7px 0;font:14px monospace}
+    button,.button{background:#08783f;color:white;border:0;font-weight:bold;cursor:pointer;padding:10px 16px;border-radius:6px;text-decoration:none;display:inline-block}
+    .muted{color:#72877b;font-size:12px}.status{background:#dff4e5;color:#086932;padding:9px;border-radius:6px;margin-bottom:15px}
+    code{background:#edf7f0;color:#075f36;padding:2px 5px;border-radius:4px}
+    .variables{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 15px}.variables code{padding:5px 8px}
+    .warning{background:#fff9e8;border-left:4px solid #e4a817;padding:10px;margin:10px 0}
+    .nav{margin-top:14px}.nav .button{background:#fff;color:#08783f;margin-right:5px}
+  </style>
+</head>
+<body>
+<div class="hero"><div style="max-width:1050px;margin:auto">
+  <div>SOLAR INDUSTRY REPORT</div>
+  <h1>Financial Formula Settings</h1>
+  <p>Edit FCF and CFO-based FCFF formulas without changing application code.</p>
+  <div class="nav">
+    <a class="button" href="/solar?token={{ token }}">Report dashboard</a>
+    <a class="button" href="/solar/companies?token={{ token }}">Companies</a>
+    <a class="button" href="/solar/topics?token={{ token }}">Topics</a>
+  </div>
+</div></div>
+<main class="wrap">
+  {% if status %}<div class="status">{{ status }}</div>{% endif %}
+  <section class="card">
+    <h2>Safety and input conventions</h2>
+    <p class="muted">Only arithmetic is accepted. Function calls, attributes, imports, assignments and unknown variables are rejected. Capex and financing expense are normalized as positive outflows before formulas run.</p>
+    <div class="variables">{% for variable in allowed_variables %}<code>{{ variable }}</code>{% endfor %}</div>
+    <div class="warning"><strong>FCFF definition:</strong> the default is a CFO-based approximation. Operating cash flow already includes working-capital movements, so the formula adds after-tax financing expense and subtracts capex. Negative results are preserved when supported by the source inputs.</div>
+  </section>
+  {% for formula in formulas %}
+  <section class="card">
+    <h2>{{ formula.label }}</h2>
+    <p class="muted">{{ formula.description }}</p>
+    <form method="post" action="/solar/formulas">
+      <input type="hidden" name="token" value="{{ token }}">
+      <input type="hidden" name="formula_key" value="{{ formula.key }}">
+      <label>Expression</label>
+      <input name="expression" required value="{{ formula.expression }}">
+      <button>Validate and save</button>
+    </form>
+    <p class="muted">Last updated: {{ formula.updated_at }}</p>
+  </section>
+  {% endfor %}
+</main>
+</body>
+</html>

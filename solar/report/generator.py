@@ -17,6 +17,8 @@ from solar.data.ratios import fetch_and_store_ratios
 from solar.database import (
     active_supplementary_topics,
     apply_listing_checks,
+    financial_formulas,
+    formula_expressions,
     mark_articles_sent,
     ratio_history,
     tracked_companies,
@@ -90,19 +92,26 @@ def _best_worst(rows: list[dict], metric: str, higher_is_better=True) -> dict:
     if not available:
         return {}
     ordered = sorted(available, key=lambda r: r[metric], reverse=higher_is_better)
-    return {"best": ordered[0]["name"], "best_value": ordered[0][metric],
-            "worst": ordered[-1]["name"], "worst_value": ordered[-1][metric]}
+    return {
+        "best": ordered[0]["name"],
+        "best_value": ordered[0][metric],
+        "best_source_url": ordered[0].get("market_source_url"),
+        "worst": ordered[-1]["name"],
+        "worst_value": ordered[-1][metric],
+        "worst_source_url": ordered[-1].get("market_source_url"),
+    }
 
 
 async def collect_report_data() -> dict:
     now = datetime.now(IST)
     companies = await tracked_companies()
     supplementary_topics = await active_supplementary_topics()
+    saved_formulas = await formula_expressions()
     # yfinance is synchronous, run price work off the event loop while news downloads.
     price_task = asyncio.to_thread(fetch_prices, companies)
     news_task = fetch_solar_news(companies, supplementary_topics)
     prices, raw_news = await asyncio.gather(price_task, news_task)
-    ratios = await fetch_and_store_ratios(companies)
+    ratios = await fetch_and_store_ratios(companies, saved_formulas)
 
     deactivated_tickers = await apply_listing_checks(prices["rows"])
     if deactivated_tickers:
@@ -182,6 +191,7 @@ async def collect_report_data() -> dict:
         "government": government,
         "supplementary": supplementary,
         "insights": insights,
+        "financial_formulas": await financial_formulas(),
         "feedback_url": feedback_url,
     }
 

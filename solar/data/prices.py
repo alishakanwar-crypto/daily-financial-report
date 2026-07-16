@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta
 from typing import Optional
+from urllib.parse import quote
 
 import httpx
 import yfinance as yf
@@ -195,6 +196,10 @@ def fetch_prices(companies: Optional[list[Company]] = None) -> dict:
             "change_pct": None,
             "trade_date": None,
             "delisting_signal": False,
+            "source_name": "Yahoo Finance historical market data",
+            "source_url": (
+                f"https://finance.yahoo.com/quote/{quote(company.ticker, safe='')}/history/"
+            ),
         }
         try:
             tk = yf.Ticker(company.ticker)
@@ -251,5 +256,6 @@ def fetch_prices(companies: Optional[list[Company]] = None) -> dict:
         "trading_date": trading_date_label or "N/A",
         "usd_inr_rate": usd_inr_rate,
         "usd_inr_date": usd_inr_date,
+        "usd_inr_source_url": "https://finance.yahoo.com/quote/INR=X/history/",
         "rows": rows,
     }

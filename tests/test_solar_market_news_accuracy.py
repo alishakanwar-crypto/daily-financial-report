@@ -4,10 +4,12 @@ import json
 import unittest
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from unittest.mock import patch
 
 from solar.config import DEFAULT_COMPANIES, IST
 from solar.data.prices import (
     OFFICIAL_MARKET_REGISTRY,
+    _fetch_usd_inr,
     _parse_bse_graph,
     _parse_bse_history,
     _parse_nasdaq_rows,
@@ -18,6 +20,17 @@ from solar.news.fetcher import MIN_RELEVANCE_SCORE, qualify_article
 
 
 class OfficialMarketDataTests(unittest.TestCase):
+    @patch("solar.data.prices.httpx.get")
+    def test_malformed_fbil_payload_degrades_to_unavailable_fx(self, get):
+        get.return_value.raise_for_status.return_value = None
+        get.return_value.json.return_value = {"data": []}
+
+        result = _fetch_usd_inr(date(2026, 7, 16))
+
+        self.assertIsNone(result["rate"])
+        self.assertEqual(result["source_name"], "FBIL USD/INR reference rate")
+        self.assertIn("unexpected response shape", result["error"])
+
     def test_solar_finance_and_market_pipeline_contains_no_secondary_feed(self):
         root = Path(__file__).resolve().parents[1]
         paths = [

@@ -387,8 +387,13 @@ def _fetch_usd_inr(today: date) -> dict:
             timeout=20,
         )
         response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, list):
+            raise ValueError("FBIL returned an unexpected response shape")
         candidates = []
-        for item in response.json():
+        for item in payload:
+            if not isinstance(item, dict):
+                continue
             if item.get("subProdName") != "INR / 1 USD":
                 continue
             process_date = datetime.strptime(

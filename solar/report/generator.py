@@ -107,7 +107,7 @@ async def collect_report_data() -> dict:
     companies = await tracked_companies()
     supplementary_topics = await active_supplementary_topics()
     saved_formulas = await formula_expressions()
-    # yfinance is synchronous, run price work off the event loop while news downloads.
+    # Official exchange requests are synchronous; keep them off the event loop.
     price_task = asyncio.to_thread(fetch_prices, companies)
     news_task = fetch_solar_news(companies, supplementary_topics)
     prices, raw_news = await asyncio.gather(price_task, news_task)

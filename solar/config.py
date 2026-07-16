@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from typing import List, Optional
 from zoneinfo import ZoneInfo
 
@@ -25,6 +24,9 @@ class Company:
         listed: bool,
         website: str = "",
         note: str = "",
+        active: bool = True,
+        listing_status: str = "",
+        consecutive_failures: int = 0,
     ):
         self.name = name
         self.ticker = ticker
@@ -33,10 +35,13 @@ class Company:
         self.listed = listed
         self.website = website
         self.note = note
+        self.active = active
+        self.listing_status = listing_status or ("listed" if listed else "private")
+        self.consecutive_failures = consecutive_failures
 
 
 # --- The competitive set: Indian solar technology companies ---
-COMPANIES: List[Company] = [
+DEFAULT_COMPANIES: List[Company] = [
     Company(
         "ReNew Energy Global",
         "RNW",
@@ -75,18 +80,48 @@ COMPANIES: List[Company] = [
     ),
     Company(
         "Emmvee Solar",
-        None,
+        "EMMVEE.NS",
         "INR",
-        "Unlisted",
-        listed=False,
-        website="https://www.emmvee.com",
-        note="Private/unlisted (IPO filed) — price & market ratios unavailable; tracked via news.",
+        "NSE",
+        listed=True,
+        website="https://www.emmveepv.com",
+        note="Emmvee Photovoltaic Power; NSE: EMMVEE, BSE: 544608, listed November 2025.",
     ),
 ]
+COMPANIES = DEFAULT_COMPANIES
 
 
-def listed_companies() -> List[Company]:
-    return [c for c in COMPANIES if c.listed and c.ticker]
+def listed_companies(companies: Optional[List[Company]] = None) -> List[Company]:
+    source = companies if companies is not None else DEFAULT_COMPANIES
+    return [c for c in source if c.active and c.listed and c.ticker]
+
+
+SUPPLEMENTARY_TOPIC_CATALOG: list[dict[str, str]] = [
+    {"name": "Iran crisis", "query": "Iran crisis latest developments"},
+    {"name": "Middle East", "query": "Middle East geopolitics energy markets"},
+    {"name": "Red Sea shipping", "query": "Red Sea shipping disruption freight rates"},
+    {"name": "Russia–Ukraine", "query": "Russia Ukraine war energy commodities"},
+    {"name": "China trade policy", "query": "China trade policy solar manufacturing exports"},
+    {"name": "US tariffs", "query": "US tariffs solar imports clean energy"},
+    {"name": "India–China relations", "query": "India China trade relations manufacturing"},
+    {"name": "Energy security", "query": "global energy security supply disruption"},
+    {"name": "Crude oil & LNG", "query": "crude oil LNG prices global energy markets"},
+    {"name": "Global interest rates", "query": "global interest rates infrastructure financing"},
+    {"name": "Rupee & currencies", "query": "Indian rupee dollar currency markets imports"},
+    {"name": "Shipping & logistics", "query": "global shipping logistics freight supply chain"},
+    {"name": "Critical minerals", "query": "critical minerals supply chain India clean energy"},
+    {"name": "Silver prices", "query": "silver prices solar panel manufacturing demand"},
+    {"name": "Aluminium prices", "query": "aluminium prices manufacturing energy transition"},
+    {"name": "Polysilicon prices", "query": "polysilicon wafer solar module prices"},
+    {"name": "Semiconductors", "query": "semiconductor supply chain power electronics India"},
+    {"name": "Battery storage", "query": "battery energy storage India global market"},
+    {"name": "Green hydrogen", "query": "green hydrogen India global policy investment"},
+    {"name": "Carbon markets", "query": "carbon markets carbon credits India policy"},
+    {"name": "Climate policy", "query": "global climate policy clean energy industry"},
+    {"name": "Cybersecurity", "query": "energy infrastructure cybersecurity power grid"},
+    {"name": "Extreme weather", "query": "extreme weather energy infrastructure supply chain"},
+    {"name": "Global solar capacity", "query": "global solar capacity installations outlook"},
+]
 
 
 class Settings(BaseSettings):
@@ -103,8 +138,8 @@ class Settings(BaseSettings):
         alias="SOLAR_DEFAULT_RECIPIENTS",
     )
 
-    report_hour_ist: int = Field(7, alias="SOLAR_REPORT_HOUR_IST")
-    report_minute_ist: int = Field(30, alias="SOLAR_REPORT_MINUTE_IST")
+    report_hour_ist: int = Field(10, alias="SOLAR_REPORT_HOUR_IST")
+    report_minute_ist: int = Field(0, alias="SOLAR_REPORT_MINUTE_IST")
 
     app_secret: str = Field("change-me-in-production", alias="APP_SECRET")
     base_url: str = Field("http://localhost:8000", alias="BASE_URL")

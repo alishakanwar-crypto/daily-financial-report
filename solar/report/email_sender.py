@@ -27,10 +27,15 @@ EMAIL_HTML = """<!doctype html><html><body style="margin:0;background:#eef6f0;fo
 </table></td></tr></table></body></html>"""
 
 
-async def send_report(pdf_path: str, report_data: dict) -> dict:
+async def send_report(
+    pdf_path: str,
+    report_data: dict,
+    recipients: list[dict] | None = None,
+) -> dict:
     if not settings.smtp_user or not settings.smtp_password:
         return {"sent": 0, "failed": 0, "errors": ["SMTP not configured"]}
-    recipients = await active_recipients()
+    if recipients is None:
+        recipients = await active_recipients()
     if not recipients:
         return {"sent": 0, "failed": 0, "errors": ["No active recipients"]}
 

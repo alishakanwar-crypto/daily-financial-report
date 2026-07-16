@@ -4,9 +4,10 @@ Automated daily financial intelligence report delivered to your inbox as a beaut
 
 ## Indian Solar Industry Intelligence
 
-The same service also generates a dedicated green-themed, clickable PDF for
-competitive analysis of **ReNew Energy Global, Waaree Energies, Premier
-Energies, Vikram Solar, and Emmvee Solar**.
+The same service also generates a dedicated green-themed, clickable PDF for a
+database-managed set of Indian solar competitors. The initial set includes
+**ReNew Energy Global, Waaree Energies, Premier Energies, Vikram Solar, and
+Emmvee Solar**.
 
 - Previous completed trading day's open, close, average, high, low, change and volume
 - Valuation, profitability, liquidity, leverage, efficiency and cash-flow ratios
@@ -15,13 +16,25 @@ Energies, Vikram Solar, and Emmvee Solar**.
 - Indian solar/alternative-energy news prioritised to the previous 24 hours
 - MNRE, PIB, Ministry of Power, CEA, SEBI and policy/regulatory monitoring
 - AI-generated impact analysis tailored to an Indian solar-industry operator
+- Company registry for adding new listings, manual remove/restore, and
+  conservative automatic delisting exclusion after three explicit provider signals
+- Searchable catalog of preset and custom supplementary topics, rendered in a
+  separate AI-ranked section without mixing them into core solar coverage
 - Clickable feedback link in every PDF; feedback becomes durable preference memory
   for subsequent AI curation
 - Admin-only JSONL export for optional reviewed OpenAI fine-tuning
 
-The solar report is scheduled daily at **07:30 IST**. Its admin dashboard is
+The solar report is scheduled daily at **10:00 AM IST**. Its admin dashboard is
 available at `/solar?token=<APP_SECRET>`, with manual generation, downloads,
-recipient management and AI-feedback review.
+recipient management (including pause/resume controls) and AI-feedback review.
+The focused mailing-list dashboard is available at
+`/solar/mailing-list?token=<APP_SECRET>`. Recipients can be paused, resumed, or
+permanently removed. Adding a recipient immediately sends
+the latest available report, then includes them in the daily 10:00 AM IST run.
+Manage tracked companies at `/solar/companies?token=<APP_SECRET>` and
+supplementary news filters at `/solar/topics?token=<APP_SECRET>`.
+USD/INR equivalents are refreshed on every report using the latest completed
+currency-market trading day, with the rate and date printed in the PDF.
 
 ## What You Get
 

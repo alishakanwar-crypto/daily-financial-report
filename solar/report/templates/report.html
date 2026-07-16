@@ -29,6 +29,11 @@ td { border-bottom:1px solid #dce9e0; padding:5px 4px; text-align:right; vertica
 tr:nth-child(even) td { background:#f7fbf8; }
 .company { font-weight:800; color:#075f36; }
 .ticker { color:#7a9184; font-size:6.7px; }
+.converted { color:#08783f; font-size:6.5px; white-space:nowrap; margin-top:1px; }
+.cash-table .converted { font-size:5px; }
+.source-line { font-size:6.5px; color:#60786b; margin-top:2px; }
+.source-line a { text-decoration:underline; }
+.formula { font-family:"DejaVu Sans Mono",monospace; font-size:6.5px; color:#174e32; }
 .positive { color:#08783f; font-weight:700; }.negative { color:#b52b2b; font-weight:700; }.mixed { color:#bd7400; font-weight:700; }.neutral { color:#60756a; }
 .metric-grid { display:flex; gap:7px; flex-wrap:wrap; margin:8px 0 12px; }
 .metric { width:31.8%; background:#f4faf6; border:1px solid #d6eadc; border-radius:7px; padding:8px; }
@@ -51,76 +56,136 @@ tr:nth-child(even) td { background:#f7fbf8; }
 </style>
 </head>
 <body>
+{% macro linked_num(value, url, suffix='') -%}
+  {% if value is defined and value is not none %}<a href="{{ url }}">{{ value|num }}{{ suffix }}</a>{% else %}N/A{% endif %}
+{%- endmacro %}
+{% macro linked_money(value, url) -%}
+  {% if value is defined and value is not none %}<a href="{{ url }}">{{ value|money('INR') }}</a>{% else %}N/A{% endif %}
+{%- endmacro %}
 <section class="cover">
   <div class="eyebrow">Competitive Intelligence • India</div>
   <h1>Solar Industry<br><span>Intelligence Report</span></h1>
   <div class="lead">Market prices, financial strength, cash-flow quality, policy developments and AI-curated competitive news — built for an Indian solar industry operator.</div>
   <div class="date">{{ report_date }}</div>
-  <div class="companies">TRACKING &nbsp; ReNew Energy Global &nbsp;•&nbsp; Waaree Energies &nbsp;•&nbsp; Premier Energies &nbsp;•&nbsp; Vikram Solar &nbsp;•&nbsp; Emmvee Solar</div>
+  <div class="companies">TRACKING &nbsp; {% for company in companies %}{{ company.name }}{% if not loop.last %} &nbsp;•&nbsp; {% endif %}{% endfor %}</div>
 </section>
 
 <section>
   <div class="section-kicker">01 • Market Monitor</div>
   <h2 class="page-title">Previous Trading Day</h2>
-  <p class="subtitle">{{ prices.trading_date }} • Publicly listed companies only • RNW is quoted in USD; Indian listings in INR.</p>
+  <p class="subtitle">{{ prices.trading_date }} • Publicly listed companies only • USD listings include INR equivalents; Indian listings remain in INR.{% if prices.usd_inr_rate is not none %} Conversion: <a href="{{ prices.usd_inr_source_url }}">USD 1 = ₹{{ prices.usd_inr_rate|num }} ({{ prices.usd_inr_date }}, Yahoo Finance)</a>.{% endif %}</p>
   <table>
     <thead><tr><th>Company</th><th>Open</th><th>Close</th><th>Average*</th><th>High</th><th>Low</th><th>Day change</th><th>Volume</th></tr></thead>
     <tbody>{% for p in prices.rows %}<tr>
-      <td><div class="company">{{ p.name }}</div><div class="ticker">{{ p.exchange }}: {{ p.ticker }} • {{ p.trade_date }}</div></td>
-      <td>{{ p.symbol }}{{ p.open|num }}</td><td>{{ p.symbol }}{{ p.close|num }}</td><td>{{ p.symbol }}{{ p.average|num }}</td>
-      <td>{{ p.symbol }}{{ p.high|num }}</td><td>{{ p.symbol }}{{ p.low|num }}</td>
-      <td class="{{ p.change_pct|pct_class }}">{% if p.change_pct is not none %}{{ "%+.2f"|format(p.change_pct) }}%{% else %}N/A{% endif %}</td>
-      <td>{{ "{:,.0f}".format(p.volume) if p.volume is not none else "N/A" }}</td>
+      <td><div class="company"><a href="{{ p.source_url }}">{{ p.name }}</a></div><div class="ticker">{{ p.exchange }}: {{ p.ticker }} • {{ p.trade_date }}<br><a href="{{ p.source_url }}">Yahoo historical data</a></div></td>
+      <td><a href="{{ p.source_url }}">{{ p.symbol }}{{ p.open|num }}</a>{% if p.currency == 'USD' and p.open is not none and prices.usd_inr_rate is not none %}<div class="converted"><a href="{{ prices.usd_inr_source_url }}">₹{{ (p.open * prices.usd_inr_rate)|num }}</a></div>{% endif %}</td>
+      <td><a href="{{ p.source_url }}">{{ p.symbol }}{{ p.close|num }}</a>{% if p.currency == 'USD' and p.close is not none and prices.usd_inr_rate is not none %}<div class="converted"><a href="{{ prices.usd_inr_source_url }}">₹{{ (p.close * prices.usd_inr_rate)|num }}</a></div>{% endif %}</td>
+      <td><a href="{{ p.source_url }}">{{ p.symbol }}{{ p.average|num }}</a>{% if p.currency == 'USD' and p.average is not none and prices.usd_inr_rate is not none %}<div class="converted"><a href="{{ prices.usd_inr_source_url }}">₹{{ (p.average * prices.usd_inr_rate)|num }}</a></div>{% endif %}</td>
+      <td><a href="{{ p.source_url }}">{{ p.symbol }}{{ p.high|num }}</a>{% if p.currency == 'USD' and p.high is not none and prices.usd_inr_rate is not none %}<div class="converted"><a href="{{ prices.usd_inr_source_url }}">₹{{ (p.high * prices.usd_inr_rate)|num }}</a></div>{% endif %}</td>
+      <td><a href="{{ p.source_url }}">{{ p.symbol }}{{ p.low|num }}</a>{% if p.currency == 'USD' and p.low is not none and prices.usd_inr_rate is not none %}<div class="converted"><a href="{{ prices.usd_inr_source_url }}">₹{{ (p.low * prices.usd_inr_rate)|num }}</a></div>{% endif %}</td>
+      <td class="{{ p.change_pct|pct_class }}">{% if p.change_pct is not none %}<a href="{{ p.source_url }}">{{ "%+.2f"|format(p.change_pct) }}%</a>{% else %}N/A{% endif %}</td>
+      <td>{% if p.volume is not none %}<a href="{{ p.source_url }}">{{ "{:,.0f}".format(p.volume) }}</a>{% else %}N/A{% endif %}</td>
     </tr>{% endfor %}</tbody>
   </table>
-  <div class="note"><strong>*Average price methodology:</strong> intraday volume-weighted average (VWAP) where Yahoo Finance provides 5-minute data; otherwise daily typical price (High + Low + Close) ÷ 3. The method is recorded for every company.</div>
-  <div class="note warning"><strong>Emmvee Solar:</strong> private/unlisted at report time; therefore no exchange-traded price is shown. It remains fully tracked for competitive and news intelligence.</div>
+  <div class="note"><strong>Market formulas:</strong> intraday VWAP = Σ(price × volume) ÷ Σ(volume) where 5-minute data are available; otherwise average = (High + Low + Close) ÷ 3. Day change = (Close − Open) ÷ Open × 100. Every input links to the same market-history source; USD-to-INR values use the linked daily USD/INR rate.</div>
+  {% for company in companies if not company.listed %}<div class="note warning"><strong><a href="{{ company.website }}">{{ company.name }}</a>:</strong> private/unlisted at report time; therefore no exchange-traded price is shown. It remains tracked for competitive and news intelligence.</div>{% endfor %}
 
   <div class="section-kicker" style="margin-top:15px">Quick comparison</div>
   <div class="metric-grid">
-    {% set labels = {'roe':'Highest ROE','net_margin':'Highest net margin','revenue_growth':'Fastest revenue growth','debt_to_equity':'Lowest debt/equity','current_ratio':'Strongest current ratio','pe':'Lowest P/E'} %}
+    {% set labels = {'roe':'Highest ROE','net_margin':'Highest net margin','revenue_growth':'Fastest revenue growth','debt_to_equity':'Lowest debt/equity','current_ratio':'Strongest current ratio'} %}
     {% for key, insight in insights.items() %}{% if insight %}<div class="metric">
-      <div class="label">{{ labels[key] }}</div><div class="value">{{ insight.best }}</div>
-      <div class="detail">{{ insight.best_value|num }}{% if key in ['roe','net_margin','revenue_growth'] %}%{% endif %}</div>
+      <div class="label">{{ labels[key] }}</div><div class="value"><a href="{{ insight.best_source_url }}">{{ insight.best }}</a></div>
+      <div class="detail"><a href="{{ insight.best_source_url }}">{{ insight.best_value|num }}{% if key in ['roe','net_margin','revenue_growth'] %}%{% endif %}</a></div>
     </div>{% endif %}{% endfor %}
   </div>
 </section>
 
 <section class="page-break">
   <div class="section-kicker">02 • Comparative Fundamentals</div>
-  <h2 class="page-title">Valuation & Profitability</h2>
-  <p class="subtitle">Each row identifies the date of the latest underlying annual statement. Market ratios are point-in-time values captured {{ generated_at }}.</p>
+  <h2 class="page-title">Official Statement Comparison</h2>
+  <p class="subtitle">All figures below are normalized to Indian rupees and taken only from linked official company, SEC, or exchange statements. Market-derived valuation metrics are deliberately excluded from this statement table.</p>
   <table>
-    <thead><tr><th>Company / Statement</th><th>P/E</th><th>Fwd P/E</th><th>P/B</th><th>P/S</th><th>EV/EBITDA</th><th>ROE</th><th>ROA</th><th>Net margin</th><th>EBITDA margin</th></tr></thead>
+    <thead><tr><th>Company / Statement</th><th>Revenue</th><th>Net profit</th><th>Total assets</th><th>Equity</th><th>Debt</th><th>ROE</th><th>ROA</th><th>Net margin</th></tr></thead>
     <tbody>{% for r in ratios %}<tr>
-      <td><div class="company">{{ r.name }}</div><div class="ticker">{{ r.exchange }}{% if r.ticker %}: {{ r.ticker }}{% endif %}<br>Statement: {{ r.statement_date }}</div></td>
-      {% if r.unlisted %}<td colspan="9" style="text-align:left">Private/unlisted — ratios not publicly available in standard market feeds.</td>{% else %}
-      <td>{{ r.pe|num }}</td><td>{{ r.forward_pe|num }}</td><td>{{ r.price_to_book|num }}</td><td>{{ r.price_to_sales|num }}</td><td>{{ r.ev_to_ebitda|num }}</td>
-      <td>{{ r.roe|num }}%</td><td>{{ r.roa|num }}%</td><td>{{ r.net_margin|num }}%</td><td>{{ r.ebitda_margin|num }}%</td>{% endif %}
+      <td><div class="company">{% if r.official_source_url %}<a href="{{ r.official_source_url }}">{{ r.name }}</a>{% else %}{{ r.name }}{% endif %}</div><div class="ticker">{{ r.exchange }}{% if r.ticker %}: {{ r.ticker }}{% endif %}<br>Statement: {{ r.statement_date }}{% if r.source_published_date %} • Published {{ r.source_published_date }}{% endif %}</div></td>
+      {% if r.unlisted or r.error %}<td colspan="8" style="text-align:left">Official statement unavailable — no external website values were substituted.</td>{% else %}
+      <td>{{ linked_money(r.revenue, r.official_source_url) }}</td>
+      <td>{{ linked_money(r.net_income, r.official_source_url) }}</td>
+      <td>{{ linked_money(r.normalized_values.total_assets, r.official_source_url) }}</td>
+      <td>{{ linked_money(r.normalized_values.total_equity, r.official_source_url) }}</td>
+      <td>{{ linked_money(r.total_debt, r.official_source_url) }}</td>
+      <td>{{ linked_num(r.roe, r.official_source_url, '%') }}</td>
+      <td>{{ linked_num(r.roa, r.official_source_url, '%') }}</td>
+      <td>{{ linked_num(r.net_margin, r.official_source_url, '%') }}</td>{% endif %}
     </tr>{% endfor %}</tbody>
   </table>
 
   <h3 style="color:#075f36">Liquidity, Leverage & Efficiency</h3>
   <table>
-    <thead><tr><th>Company</th><th>Current</th><th>Quick</th><th>Debt / Equity</th><th>Debt / Assets</th><th>Interest cover</th><th>Asset turnover</th><th>Revenue growth</th><th>Profit growth</th></tr></thead>
-    <tbody>{% for r in ratios if not r.unlisted %}<tr><td class="company">{{ r.name }}<div class="ticker">{{ r.statement_date }}</div></td>
-      <td>{{ r.current_ratio|num }}</td><td>{{ r.quick_ratio|num }}</td><td>{{ r.debt_to_equity|num }}</td><td>{{ r.debt_to_assets|num }}</td><td>{{ r.interest_coverage|num }}x</td><td>{{ r.asset_turnover|num }}x</td>
-      <td class="{{ r.revenue_growth|pct_class }}">{{ r.revenue_growth|num }}%</td><td class="{{ r.profit_growth|pct_class }}">{{ r.profit_growth|num }}%</td></tr>{% endfor %}</tbody>
+    <thead><tr><th>Company</th><th>Current</th><th>Quick</th><th>Debt / Equity</th><th>Debt / Assets</th><th>Asset turnover</th><th>Revenue growth</th><th>Profit growth</th></tr></thead>
+    <tbody>{% for r in ratios if not r.unlisted and not r.error %}<tr><td class="company"><a href="{{ r.official_source_url }}">{{ r.name }}</a><div class="ticker">{{ r.statement_date }} • <a href="{{ r.official_source_url }}">Official statement</a></div></td>
+      <td>{{ linked_num(r.current_ratio, r.official_source_url) }}</td>
+      <td>{{ linked_num(r.quick_ratio, r.official_source_url) }}</td>
+      <td>{{ linked_num(r.debt_to_equity, r.official_source_url) }}</td>
+      <td>{{ linked_num(r.debt_to_assets, r.official_source_url) }}</td>
+      <td>{{ linked_num(r.asset_turnover, r.official_source_url, 'x') }}</td>
+      <td class="{{ r.revenue_growth|pct_class }}">{{ linked_num(r.revenue_growth, r.official_source_url, '%') }}</td>
+      <td class="{{ r.profit_growth|pct_class }}">{{ linked_num(r.profit_growth, r.official_source_url, '%') }}</td></tr>{% endfor %}</tbody>
   </table>
 
   <h3 style="color:#075f36">Cash Flow Quality</h3>
-  <table>
-    <thead><tr><th>Company</th><th>Operating cash flow</th><th>Free cash flow</th><th>OCF margin</th><th>FCF margin</th><th>Cash conversion (OCF/NI)</th><th>Capex / Revenue</th><th>Total debt</th><th>Cash</th></tr></thead>
-    <tbody>{% for r in ratios if not r.unlisted %}<tr><td class="company">{{ r.name }}<div class="ticker">{{ r.currency }} • {{ r.statement_date }}</div></td>
-      <td>{{ r.operating_cf|money(r.currency) }}</td><td>{{ r.free_cf|money(r.currency) }}</td><td>{{ r.operating_cf_margin|num }}%</td><td>{{ r.fcf_margin|num }}%</td><td>{{ r.cash_conversion|num }}x</td><td>{{ r.capex_to_revenue|num }}%</td><td>{{ r.total_debt|money(r.currency) }}</td><td>{{ r.cash|money(r.currency) }}</td></tr>{% endfor %}</tbody>
+  <table class="cash-table">
+    <thead><tr><th>Company / CF period</th><th>Operating CF</th><th>Capex<br>(positive outflow)</th><th>Finance expense</th><th>Effective tax</th><th>FCF</th><th>FCFF<br>(CFO-based)</th><th>FCF / FCFF margin</th></tr></thead>
+    <tbody>{% for r in ratios if not r.unlisted and not r.error %}<tr><td class="company"><a href="{{ r.data_source_url }}">{{ r.name }}</a><div class="ticker">INR • {{ r.cash_flow_statement_date }}<br><a href="{{ r.data_source_url }}">{{ r.data_source_type }}</a></div></td>
+      <td>{{ linked_money(r.operating_cf, r.data_source_url) }}</td>
+      <td>{{ linked_money(r.capex, r.data_source_url) }}</td>
+      <td>{{ linked_money(r.interest_expense, r.data_source_url) }}</td>
+      <td>{% if r.tax_rate is not none %}<a href="{{ r.data_source_url }}">{{ (r.tax_rate * 100)|num }}%</a>{% else %}N/A{% endif %}</td>
+      <td>{{ linked_money(r.free_cf, r.data_source_url) }}</td>
+      <td>{{ linked_money(r.fcff, r.data_source_url) }}</td>
+      <td>{{ linked_num(r.fcf_margin, r.data_source_url, '%') }} / {{ linked_num(r.fcff_margin, r.data_source_url, '%') }}</td></tr>{% endfor %}</tbody>
   </table>
-  <div class="note"><strong>Automatic updates:</strong> ratios are recalculated on every report run. A dated SQLite snapshot is added whenever a company publishes a statement with a new period end; existing period snapshots are refreshed for feed corrections.</div>
+  {% for r in ratios if not r.unlisted and not r.error %}<div class="card">
+    <strong><a href="{{ r.data_source_url }}">{{ r.name }} — calculation and source audit</a></strong>
+    <div class="source-line"><strong>Primary official source:</strong> <a href="{{ r.data_source_url }}">{{ r.data_source_name }}</a> • {{ r.data_source_type }} • Period {{ r.cash_flow_statement_date }} • Published {{ r.source_published_date or 'not stated' }} • Captured {{ r.source_captured_at }}</div>
+    <div class="source-line"><strong>Source units:</strong> {{ r.raw_unit }} → normalized INR. Scope: {{ r.scope }}</div>
+    <div class="source-line"><strong>Link validation:</strong> {{ r.source_link_status }} at {{ r.source_link_checked_at }} — {{ r.source_link_reason }}.{% if r.document_url %} <a href="{{ r.document_url }}">Exact document</a> ({{ r.document_link_status }} — {{ r.document_link_reason }}).{% endif %}{% if r.landing_url %} <a href="{{ r.landing_url }}">Official landing page</a>.{% endif %}</div>
+    <div class="source-line"><strong>Cross-check:</strong> {{ r.cross_check_status }} — {{ r.source_freshness_status }}. {{ r.cross_check_detail }} The market comparison is not used as a statement input.</div>
+    {% if r.official_raw_capex is defined and r.official_raw_capex is not none %}<div class="source-line"><strong>Capex sign normalization:</strong> <a href="{{ r.data_source_url }}">filing cash outflow {{ r.official_raw_capex|money('INR') }}</a> → <a href="{{ r.data_source_url }}">positive formula input {{ r.capex|money('INR') }}</a>.</div>{% endif %}
+    <div class="source-line">{{ r.source_input_note }}</div>
+    <div class="formula"><strong>FCF:</strong> {{ r.fcf_formula }} • operating_cf=<a href="{{ r.data_source_url }}">{{ r.operating_cf|money('INR') }}</a>, capex=<a href="{{ r.data_source_url }}">{{ r.capex|money('INR') }}</a> → <a href="{{ r.data_source_url }}">{{ r.free_cf|money('INR') }}</a></div>
+    <div class="formula"><strong>FCFF:</strong> {{ r.fcff_formula }} • operating_cf=<a href="{{ r.data_source_url }}">{{ r.operating_cf|money('INR') }}</a>, interest_expense=<a href="{{ r.data_source_url }}">{{ r.interest_expense|money('INR') }}</a>, tax_rate={% if r.tax_rate is not none %}<a href="{{ r.data_source_url }}">{{ (r.tax_rate * 100)|num }}%</a>{% else %}N/A{% endif %}, capex=<a href="{{ r.data_source_url }}">{{ r.capex|money('INR') }}</a> → <a href="{{ r.data_source_url }}">{{ r.fcff|money('INR') }}</a></div>
+    <div class="source-line"><strong>Interpretation:</strong> {{ r.cash_flow_explanation }}</div>
+  </div>{% endfor %}
+  <h3 style="color:#075f36">Balance-sheet Cash Context</h3>
+  <table><thead><tr><th>Company</th><th>Cash conversion (OCF/NI)</th><th>Capex / Revenue</th><th>Total debt</th><th>Cash</th></tr></thead>
+    <tbody>{% for r in ratios if not r.unlisted and not r.error %}<tr><td class="company"><a href="{{ r.official_source_url }}">{{ r.name }}</a><div class="ticker"><a href="{{ r.official_source_url }}">Official consolidated statement</a></div></td><td>{{ linked_num(r.cash_conversion, r.official_source_url, 'x') }}</td><td>{{ linked_num(r.capex_to_revenue, r.official_source_url, '%') }}</td><td>{{ linked_money(r.total_debt, r.official_source_url) }}</td><td>{{ linked_money(r.cash, r.official_source_url) }}</td></tr>{% endfor %}</tbody>
+  </table>
+  <h3 style="color:#075f36">Formula & Input Ledger</h3>
+  <p class="subtitle">Every calculated metric states its formula, linked INR inputs, result and unit. Missing official inputs remain N/A.</p>
+  {% for r in ratios if not r.unlisted and not r.error %}
+    <div class="card">
+      <strong><a href="{{ r.official_source_url }}">{{ r.name }}</a></strong>
+      {% for metric, audit in r.formula_audit.items() %}
+        <div class="formula">
+          <strong>{{ metric|replace('_', ' ')|title }}:</strong>
+          {{ audit.formula }} •
+          {% for input_name, input_value in audit.formula_inputs.items() %}
+            {{ input_name }}={% if input_value is not none %}<a href="{{ audit.formula_source_urls[input_name] }}">{% if input_name == 'tax_rate' %}{{ (input_value * 100)|num }}%{% else %}{{ input_value|money('INR') }}{% endif %}</a>{% else %}N/A{% endif %}{% if not loop.last %}, {% endif %}
+          {% endfor %}
+          → {% if audit.result is not none %}<a href="{{ r.official_source_url }}">{% if audit.units == 'INR' %}{{ audit.result|money('INR') }}{% else %}{{ audit.result|num }}{{ audit.units }}{% endif %}</a>{% else %}N/A{% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  {% endfor %}
+  <div class="note"><strong>Formula governance:</strong> {% for formula in financial_formulas %}<span class="formula">{{ formula.label }} = {{ formula.expression }}</span>{% if not loop.last %}; {% endif %}{% endfor %}. Formulas are validated before saving; negative results are never forced positive. Ratios are recalculated on every report run and stored as dated SQLite snapshots.</div>
 </section>
 
 <section class="page-break">
   <div class="section-kicker">03 • AI-Curated Industry Intelligence</div>
   <h2 class="page-title">Indian Solar & Alternative Energy News</h2>
   <div class="summary"><strong>AI Executive View:</strong> {{ industry.executive_summary }}</div>
+  {% if industry.articles %}<div class="source-line"><strong>Linked executive-view sources:</strong> {% for a in industry.articles %}<a href="{{ a.url }}">{{ a.source or a.title }}</a>{% if not loop.last %} • {% endif %}{% endfor %}</div>{% endif %}
   {% if industry.watch_items %}<div class="card"><strong>What to watch next</strong><ul class="watch">{% for w in industry.watch_items %}<li>{{ w }}</li>{% endfor %}</ul></div>{% endif %}
   {% for a in industry.articles %}<article class="news">
     <div><span class="badge {% if a.recency != 'Last 24 hours' %}context{% endif %}">{{ a.recency }}</span> <span class="impact {{ a.impact|impact_class }}">{{ a.impact }}</span> <span class="badge">Impact {{ a.impact_score }}/100</span></div>
@@ -135,6 +200,7 @@ tr:nth-child(even) td { background:#f7fbf8; }
   <h2 class="page-title">Indian Government Notifications</h2>
   <p class="subtitle">MNRE, PIB, Ministry of Power, CEA, SEBI and policy-related coverage — ranked for likely commercial or stock-market impact.</p>
   <div class="summary"><strong>AI Policy View:</strong> {{ government.executive_summary }}</div>
+  {% if government.articles %}<div class="source-line"><strong>Linked policy-view sources:</strong> {% for a in government.articles %}<a href="{{ a.url }}">{{ a.source or a.title }}</a>{% if not loop.last %} • {% endif %}{% endfor %}</div>{% endif %}
   {% if government.watch_items %}<div class="card"><strong>Regulatory watchlist</strong><ul class="watch">{% for w in government.watch_items %}<li>{{ w }}</li>{% endfor %}</ul></div>{% endif %}
   {% for a in government.articles %}<article class="news">
     <div><span class="badge {% if a.recency != 'Last 24 hours' %}context{% endif %}">{{ a.recency }}</span> <span class="impact {{ a.impact|impact_class }}">{{ a.impact }}</span> <span class="badge">Impact {{ a.impact_score }}/100</span></div>
@@ -142,13 +208,30 @@ tr:nth-child(even) td { background:#f7fbf8; }
     <div class="news-meta">{{ a.source }} • {{ a.published.strftime('%d-%m-%Y %H:%M IST') if a.published else 'Publication time unavailable' }}{% if a.companies_affected %} • Affects: {{ a.companies_affected|join(', ') }}{% endif %}</div>
     <div class="why"><strong>Why it matters:</strong> {{ a.one_line_why }}</div><div class="takeaway"><strong>Investor / operator takeaway:</strong> {{ a.investor_takeaway }}</div>
   </article>{% else %}<div class="note">No qualifying new government or policy item found in the monitored window.</div>{% endfor %}
+</section>
 
+{% if supplementary.topics %}<section class="page-break">
+  <div class="section-kicker">05 • Editor-Selected Supplement</div>
+  <h2 class="page-title">Supplementary Intelligence</h2>
+  <p class="subtitle">Selected topics: {{ supplementary.topics|map(attribute='name')|join(', ') }}. Kept separate from core solar and policy coverage.</p>
+  <div class="summary"><strong>AI Supplementary View:</strong> {{ supplementary.executive_summary }}</div>
+  {% if supplementary.articles %}<div class="source-line"><strong>Linked supplementary-view sources:</strong> {% for a in supplementary.articles %}<a href="{{ a.url }}">{{ a.source or a.title }}</a>{% if not loop.last %} • {% endif %}{% endfor %}</div>{% endif %}
+  {% if supplementary.watch_items %}<div class="card"><strong>What to watch next</strong><ul class="watch">{% for item in supplementary.watch_items %}<li>{{ item }}</li>{% endfor %}</ul></div>{% endif %}
+  {% for a in supplementary.articles %}<article class="news">
+    <div><span class="badge">{{ a.topic_name }}</span> <span class="badge {% if a.recency != 'Last 24 hours' %}context{% endif %}">{{ a.recency }}</span> <span class="impact {{ a.impact|impact_class }}">{{ a.impact }}</span> <span class="badge">Impact {{ a.impact_score }}/100</span></div>
+    <div class="news-title"><a href="{{ a.url }}">{{ a.title }}</a></div>
+    <div class="news-meta">{{ a.source }} • {{ a.published.strftime('%d-%m-%Y %H:%M IST') if a.published else 'Publication time unavailable' }}</div>
+    <div class="why"><strong>Why it matters:</strong> {{ a.one_line_why }}</div><div class="takeaway"><strong>Business takeaway:</strong> {{ a.investor_takeaway }}</div>
+  </article>{% else %}<div class="note">No qualifying new stories found for the selected supplementary topics.</div>{% endfor %}
+</section>{% endif %}
+
+<section>
   <div class="feedback">
     <strong>Help this report learn what matters to your business.</strong><br>
     Rate relevance, flag weak stories, and request metrics. Your feedback becomes preference memory for the next AI-curated report.<br>
     <a href="{{ feedback_url }}">Give feedback on this report</a>
   </div>
-  <p class="disclaimer">Data sources include Yahoo Finance, public company financial statements, Google News-indexed publishers and Indian government domains. Links remain clickable in the PDF. AI commentary may contain errors and should be checked against linked primary sources. This is competitive intelligence, not investment advice. Generated {{ generated_at }}.</p>
+  <p class="disclaimer">Every displayed market and financial figure is hyperlinked. Financial-statement values come only from linked official company, SEC or exchange statements, are normalized to INR, and are never replaced with Yahoo or another external financial website. Market prices and exchange-rate figures are separately labelled market-derived. Blocked or unavailable official links are explicitly flagged; every calculated financial metric shows its formula and cited inputs. AI commentary may contain errors and should be checked against the linked primary sources. This is competitive intelligence, not investment advice. Generated {{ generated_at }}.</p>
 </section>
 </body>
 </html>
